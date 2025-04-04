@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 
 interface SidebarItem {
   id: string;
-  icon: JSX.Element;
+  iconSrc: string;
+  iconAlt: string;
   label: string;
 }
 
@@ -22,9 +23,25 @@ const styles = {
 function Sidebar() {
   const [expanded, setExpanded] = useState(false);
   const [activeItem, setActiveItem] = useState('home');
+  const [prevActiveItem, setPrevActiveItem] = useState('');
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [isHovering, setIsHovering] = useState(false);
+  const [indicatorStyle, setIndicatorStyle] = useState<React.CSSProperties>({
+    position: 'absolute',
+    left: '0',
+    top: '0',
+    width: '5px',
+    height: '26px',
+    backgroundColor: '#000000',
+    borderRadius: '0 4px 4px 0',
+    transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+    opacity: 0,
+    transform: 'translateY(0)',
+  });
+  
+  // Referencias para cada elemento de la lista
+  const itemRefs = useRef<{ [key: string]: HTMLLIElement | null }>({});
   
   // Set a timer to handle hover delay
   const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -78,6 +95,8 @@ function Sidebar() {
   };
 
   const handleItemClick = (id: string) => {
+    // Guardar el ítem activo anterior
+    setPrevActiveItem(activeItem);
     setActiveItem(id);
     // On mobile, clicking an item collapses the sidebar
     if (isMobile && expanded) {
@@ -85,76 +104,99 @@ function Sidebar() {
     }
   };
 
+  // Actualizar la posición del indicador cuando cambia el ítem activo
+  useEffect(() => {
+    const activeRef = itemRefs.current[activeItem];
+    if (activeRef) {
+      const rect = activeRef.getBoundingClientRect();
+      const top = rect.top;
+      const parentRect = sidebarRef.current?.getBoundingClientRect();
+      const parentTop = parentRect?.top || 0;
+      const relativeTop = top - parentTop;
+      
+      setIndicatorStyle(prev => ({
+        ...prev,
+        top: `${relativeTop + (rect.height / 2) - (26 / 2)}px`,
+        opacity: 1,
+        transform: prevActiveItem ? 'translateY(0) scale(1)' : 'translateY(0) scale(1)',
+      }));
+    }
+  }, [activeItem, expanded]);
+
+  // Efecto para animar la entrada inicial del indicador
+  useEffect(() => {
+    setIndicatorStyle(prev => ({
+      ...prev,
+      opacity: 0,
+      transform: 'translateY(-20px) scale(0.8)',
+    }));
+    
+    setTimeout(() => {
+      const activeRef = itemRefs.current[activeItem];
+      if (activeRef) {
+        const rect = activeRef.getBoundingClientRect();
+        const top = rect.top;
+        const parentRect = sidebarRef.current?.getBoundingClientRect();
+        const parentTop = parentRect?.top || 0;
+        const relativeTop = top - parentTop;
+        
+        setIndicatorStyle(prev => ({
+          ...prev,
+          top: `${relativeTop + (rect.height / 2) - (26 / 2)}px`,
+          opacity: 1,
+          transform: 'translateY(0) scale(1)',
+        }));
+      }
+    }, 100);
+  }, []);
+
+  // Función para obtener la ruta del icono según el estado activo
+  const getIconPath = (iconPath: string, isActive: boolean) => {
+    // Para todos los iconos, usamos la versión _black cuando está activo
+    return isActive ? iconPath.replace('.svg', '_black.svg') : iconPath;
+  };
+
   const sidebarItems: SidebarItem[] = [
     {
       id: 'home',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path>
-          <polyline points="9 22 9 12 15 12 15 22"></polyline>
-        </svg>
-      ),
-      label: 'Resumen'
+      iconSrc: '/icons/home.svg',
+      iconAlt: 'Home icon',
+      label: 'Dashboard'
     },
     {
       id: 'inventory',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
-          <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"></path>
-        </svg>
-      ),
+      iconSrc: '/icons/inventario.svg',
+      iconAlt: 'Inventory icon',
       label: 'Inventario'
     },
     {
       id: 'production',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"></path>
-          <path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"></path>
-        </svg>
-      ),
+      iconSrc: '/icons/produccion.svg',
+      iconAlt: 'Production icon',
       label: 'Producción'
     },
     {
       id: 'employees',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path>
-          <circle cx="9" cy="7" r="4"></circle>
-          <path d="M23 21v-2a4 4 0 00-3-3.87"></path>
-          <path d="M16 3.13a4 4 0 010 7.75"></path>
-        </svg>
-      ),
+      iconSrc: '/icons/trabajadores.svg',
+      iconAlt: 'Employees icon',
       label: 'Trabajadores'
     },
     {
       id: 'clients',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path>
-          <circle cx="12" cy="7" r="4"></circle>
-        </svg>
-      ),
+      iconSrc: '/icons/clientes.svg',
+      iconAlt: 'Clients icon',
       label: 'Clientes'
     },
     {
       id: 'equipment',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"></path>
-        </svg>
-      ),
-      label: 'A equipar'
+      iconSrc: '/icons/AI.svg',
+      iconAlt: 'Equipment icon',
+      label: 'AI Team'
     },
     {
       id: 'settings',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"></path>
-        </svg>
-      ),
+      iconSrc: '/icons/Settings.svg',
+      iconAlt: 'Settings icon',
       label: 'Ajustes'
     }
   ];
@@ -179,9 +221,16 @@ function Sidebar() {
         borderRight: '1px solid rgba(0, 0, 0, 0.05)',
         overflow: 'hidden',
         zIndex: 990,
+        fontFamily: '"Poppins", sans-serif',
+        WebkitFontSmoothing: 'antialiased',
+        MozOsxFontSmoothing: 'grayscale',
+        textRendering: 'optimizeLegibility',
         ...(isHovering ? styles.sidebarHover : {})
       }}
     >
+      {/* Indicador flotante que se mueve entre elementos */}
+      <div style={indicatorStyle}></div>
+
       {/* Header */}
       <div style={{ 
         padding: '20px 0', 
@@ -190,22 +239,16 @@ function Sidebar() {
         marginBottom: '40px',
         transition: 'transform 0.3s ease'
       }}>
-        <svg 
-          width="24" 
-          height="24" 
-          viewBox="0 0 24 24" 
-          fill="none" 
-          xmlns="http://www.w3.org/2000/svg"
+        <img 
+          src="/icons/cat.png" 
+          alt="Cat icon"
+          width="44" 
+          height="44"
           style={{
             transition: 'transform 0.3s ease',
             transform: expanded ? 'scale(1.1)' : 'scale(1)'
           }}
-        >
-          <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M8 14C8 14 9.5 16 12 16C14.5 16 16 14 16 14" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M9 9H9.01" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M15 9H15.01" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+        />
       </div>
 
       {/* Nav Items */}
@@ -218,7 +261,8 @@ function Sidebar() {
         alignItems: 'center',
         justifyContent: 'center',
         scrollbarWidth: 'none', // Firefox
-        msOverflowStyle: 'none' // IE/Edge
+        msOverflowStyle: 'none', // IE/Edge
+        position: 'relative',
       }}>
         <ul style={{ 
           listStyle: 'none', 
@@ -244,13 +288,26 @@ function Sidebar() {
                 -ms-overflow-style: none;
                 scrollbar-width: none;
               }
+
+              /* Animaciones para los ítems */
+              @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+              }
+              
+              @keyframes pulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+                100% { transform: scale(1); }
+              }
             `}
           </style>
           
           {sidebarItems.map((item) => (
             <li 
               key={item.id}
-              className=""
+              ref={el => itemRefs.current[item.id] = el}
+              className={activeItem === item.id ? 'active' : ''}
               onClick={() => handleItemClick(item.id)}
               style={{ 
                 width: '100%',
@@ -262,6 +319,7 @@ function Sidebar() {
                 backgroundColor: 'transparent',
                 transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                 position: 'relative',
+                animation: activeItem === item.id ? 'pulse 0.5s cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
               }}
             >
               <div 
@@ -279,19 +337,32 @@ function Sidebar() {
                   display: 'flex',
                   justifyContent: 'center',
                   alignItems: 'center',
-                  color: '#9E9E9E',
                 }}>
-                  {item.icon}
+                  <img 
+                    src={getIconPath(item.iconSrc, activeItem === item.id)}
+                    alt={item.iconAlt} 
+                    width="20" 
+                    height="20"
+                    style={{
+                      transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                      transform: activeItem === item.id ? 'scale(1.1)' : 'scale(1)',
+                    }}
+                  />
                 </span>
                 <span style={{ 
                   marginLeft: '12px',
                   whiteSpace: 'nowrap',
                   opacity: expanded ? 1 : 0,
                   transform: expanded ? 'translateX(0)' : 'translateX(-10px)',
-                  transition: 'opacity 0.25s ease, transform 0.25s ease',
+                  transition: 'opacity 0.25s ease, transform 0.25s ease, color 0.3s ease, font-weight 0.3s ease',
                   fontSize: '14px',
-                  fontWeight: '400',
-                  color: '#9E9E9E',
+                  fontWeight: activeItem === item.id ? '600' : '400',
+                  color: activeItem === item.id ? '#000000' : '#666666',
+                  fontFamily: '"Poppins", sans-serif',
+                  WebkitFontSmoothing: 'antialiased',
+                  MozOsxFontSmoothing: 'grayscale',
+                  letterSpacing: '0.011em',
+                  textShadow: '0 0 0 rgba(0,0,0,.01)',
                 }}>
                   {item.label}
                 </span>

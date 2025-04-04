@@ -2,6 +2,9 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 html, body {
@@ -10,12 +13,26 @@ html, body {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  /* Optimizaciones para Electron */
+  user-select: none; /* Previene selección de texto no deseada */
+  -webkit-user-drag: none; /* Evita arrastrar elementos */
+  -webkit-app-region: no-drag; /* Control de región de arrastre */
 }
 
 body {
   background-color: white;
   color: black;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  /* Ajustes específicos para renderizado en Electron */
+  text-shadow: 0 0 0 transparent;
+  transform: translateZ(0); /* Activa aceleración por hardware */
+  backface-visibility: hidden; /* Mejora rendimiento */
+}
+
+/* Aplicar antialiasing específicamente para texto en Electron */
+.text, p, h1, h2, h3, h4, h5, h6, span, a, button, input, textarea, select, li, label {
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
 }
 
 #root {
@@ -33,6 +50,10 @@ body {
 
 .sidebar svg {
   color: #9E9E9E;
+}
+
+.sidebar img {
+  opacity: 1;
 }
 
 .sidebar li {
@@ -57,16 +78,6 @@ body {
 
 .sidebar li:hover {
   background-color: transparent;
-}
-
-.sidebar li.active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background-color: black;
 }
 
 /* Estilos responsivos */
