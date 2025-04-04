@@ -32,9 +32,21 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
     },
+    width: 1280,
+    height: 800,
+    minWidth: 800,
+    minHeight: 600,
+    show: false,
+    frame: true,
+    backgroundColor: '#FAF5E4',
   })
 
-  // Test active push message to Renderer-process.
+  win.maximize()
+
+  win.once('ready-to-show', () => {
+    win?.show()
+  })
+
   win.webContents.on('did-finish-load', () => {
     win?.webContents.send('main-process-message', (new Date).toLocaleString())
   })
@@ -42,7 +54,6 @@ function createWindow() {
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)
   } else {
-    // win.loadFile('dist/index.html')
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
 }

@@ -15,7 +15,18 @@ function createWindow() {
     icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs")
-    }
+    },
+    width: 1280,
+    height: 800,
+    minWidth: 800,
+    minHeight: 600,
+    show: false,
+    frame: true,
+    backgroundColor: "#FAF5E4"
+  });
+  win.maximize();
+  win.once("ready-to-show", () => {
+    win == null ? void 0 : win.show();
   });
   win.webContents.on("did-finish-load", () => {
     win == null ? void 0 : win.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());

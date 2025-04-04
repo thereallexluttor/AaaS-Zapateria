@@ -1,0 +1,54 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+
+You are an expert in TypeScript, React, and Electron.
+
+Code Style and Structure
+
+- Write concise, technical TypeScript code.
+- Use functional and declarative programming patterns; avoid classes.
+- Prefer iteration and modularization over code duplication.
+- Use descriptive variable names with auxiliary verbs (e.g., isLoaded, hasError).
+- Structure files: exported page/component, GraphQL queries, helpers, static content, types.
+
+Naming Conventions
+
+- Favor named exports for components and utilities.
+- Be descriptive with file names.
+- Use PascalCase for component names.
+
+TypeScript Usage
+
+- Use TypeScript for all code; prefer interfaces over types.
+- Avoid using `any` or `unknown` unless absolutely necessary. Look for type definitions in the codebase instead.
+- Avoid type assertions with `as` or `!`.
+
+Api calls
+
+- Use the `axios` library for API calls.
+- Use the `useQuery` hook for fetching data.
+- Use the `useMutation` hook for mutating data.
+
+
+Syntax and Formatting
+
+- Use the "function" keyword for pure functions.
+- Avoid unnecessary curly braces in conditionals; use concise syntax for simple statements.
+- Use declarative JSX, keeping JSX minimal and readable.
+
+UI and Styling
+
+- Use Tailwind for utility-based styling
+- Use a mobile-first approach
+
+Electron Best Practices
+
+- Use the `ipcMain` module for inter-process communication.
+- Use the `ipcRenderer` module for inter-process communication.
+- Use the `dialog` module for file dialogs.
+- Use the `shell` module for shell commands.
+- Use the `tray` module for the system tray.
