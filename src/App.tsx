@@ -1,5 +1,6 @@
 import './App.css'
 import Sidebar from './components/Sidebar'
+import TitleBar from './components/TitleBar'
 
 function App() {
   return (
@@ -15,10 +16,12 @@ function App() {
       right: 0,
       bottom: 0
     }}>
+      <TitleBar />
       <Sidebar />
       <div style={{ 
         flex: 1, 
         padding: '20px',
+        paddingTop: '52px',
         overflow: 'auto',
         height: '100%',
         position: 'relative'

@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, Menu, ipcMain } from "electron";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -21,8 +21,9 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     show: false,
-    frame: true,
-    backgroundColor: "#FAF5E4"
+    frame: false,
+    backgroundColor: "#ffffff",
+    titleBarStyle: "hidden"
   });
   win.maximize();
   win.once("ready-to-show", () => {
@@ -48,7 +49,25 @@ app.on("activate", () => {
     createWindow();
   }
 });
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
+  createWindow();
+  ipcMain.on("window-minimize", () => {
+    if (win) win.minimize();
+  });
+  ipcMain.on("window-maximize", () => {
+    if (win) {
+      if (win.isMaximized()) {
+        win.unmaximize();
+      } else {
+        win.maximize();
+      }
+    }
+  });
+  ipcMain.on("window-close", () => {
+    if (win) win.close();
+  });
+});
 export {
   MAIN_DIST,
   RENDERER_DIST,

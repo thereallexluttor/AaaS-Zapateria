@@ -8,10 +8,6 @@ interface SidebarItem {
 
 // Definir CSS como objeto para animaciones y estilos
 const styles = {
-  '@keyframes slideInLeft': {
-    from: { transform: 'translateX(-100%)' },
-    to: { transform: 'translateX(0)' }
-  },
   sidebarHover: {
     boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
   },
@@ -32,24 +28,6 @@ function Sidebar() {
   
   // Set a timer to handle hover delay
   const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Define el estilo de animación para el indicador
-  useEffect(() => {
-    // Crear un elemento de estilo para las animaciones
-    const styleElement = document.createElement('style');
-    styleElement.textContent = `
-      @keyframes slideInLeft {
-        from { transform: translateX(-100%); }
-        to { transform: translateX(0); }
-      }
-    `;
-    document.head.appendChild(styleElement);
-
-    // Limpieza al desmontar
-    return () => {
-      document.head.removeChild(styleElement);
-    };
-  }, []);
 
   const handleMouseEnter = () => {
     // Clear any existing timer
@@ -189,7 +167,8 @@ function Sidebar() {
       className={`sidebar ${expanded ? 'expanded' : 'collapsed'} ${isHovering ? 'hovering' : ''}`}
       style={{
         width: expanded ? '220px' : '60px',
-        height: '100vh',
+        height: 'calc(100vh - 32px)',
+        marginTop: '32px',
         backgroundColor: '#fff',
         transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
         display: 'flex',
@@ -199,7 +178,7 @@ function Sidebar() {
         boxShadow: expanded ? '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' : 'none',
         borderRight: '1px solid rgba(0, 0, 0, 0.05)',
         overflow: 'hidden',
-        zIndex: 1000,
+        zIndex: 990,
         ...(isHovering ? styles.sidebarHover : {})
       }}
     >
@@ -234,6 +213,10 @@ function Sidebar() {
         flex: 1, 
         overflowY: 'auto', 
         padding: '0',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
         scrollbarWidth: 'none', // Firefox
         msOverflowStyle: 'none' // IE/Edge
       }}>
@@ -241,7 +224,11 @@ function Sidebar() {
           listStyle: 'none', 
           padding: 0, 
           margin: 0,
+          width: '100%',
           overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
           scrollbarWidth: 'none', // Firefox
           msOverflowStyle: 'none' // IE/Edge
         }}>
@@ -263,75 +250,52 @@ function Sidebar() {
           {sidebarItems.map((item) => (
             <li 
               key={item.id}
-              className={activeItem === item.id ? 'active' : ''}
+              className=""
               onClick={() => handleItemClick(item.id)}
-              onMouseOver={(e) => {
-                if (activeItem === item.id) {
-                  e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.05)';
-                } else {
-                  e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.02)';
-                }
-              }}
-              onMouseOut={(e) => {
-                if (activeItem === item.id) {
-                  e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.03)';
-                } else {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }
-              }}
               style={{ 
-                margin: '8px 0',
-                padding: expanded ? '10px 16px' : '10px 0',
+                width: '100%',
+                height: '42px',
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 cursor: 'pointer',
-                borderLeft: activeItem === item.id ? '3px solid #000' : '3px solid transparent',
-                backgroundColor: activeItem === item.id ? 'rgba(0, 0, 0, 0.03)' : 'transparent',
+                backgroundColor: 'transparent',
                 transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                borderRadius: '0 4px 4px 0',
-                transform: activeItem === item.id ? 'translateX(2px)' : 'translateX(0)',
                 position: 'relative',
-                overflow: 'hidden'
               }}
             >
-              {activeItem === item.id && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: 0,
-                    top: 0,
-                    height: '100%',
-                    width: '3px',
-                    backgroundColor: '#000',
-                    animation: 'slideInLeft 0.3s ease-out forwards',
-                  }}
-                />
-              )}
-              <div style={{ 
-                width: '22px', 
-                height: '22px', 
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                marginLeft: expanded ? '0' : '18px',
-                marginRight: expanded ? '12px' : '0',
-                color: activeItem === item.id ? '#000' : '#9E9E9E',
-                transition: 'all 0.25s ease',
-                transform: activeItem === item.id ? 'scale(1.1)' : 'scale(1)',
-              }}>
-                {item.icon}
+              <div 
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: expanded ? 'flex-start' : 'left',
+                  paddingLeft: expanded ? '16px' : '18px',
+                  transition: 'all 0.25s ease',
+                }}
+              >
+                <span style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  color: '#9E9E9E',
+                }}>
+                  {item.icon}
+                </span>
+                <span style={{ 
+                  marginLeft: '12px',
+                  whiteSpace: 'nowrap',
+                  opacity: expanded ? 1 : 0,
+                  transform: expanded ? 'translateX(0)' : 'translateX(-10px)',
+                  transition: 'opacity 0.25s ease, transform 0.25s ease',
+                  fontSize: '14px',
+                  fontWeight: '400',
+                  color: '#9E9E9E',
+                }}>
+                  {item.label}
+                </span>
               </div>
-              <span style={{ 
-                whiteSpace: 'nowrap',
-                opacity: expanded ? 1 : 0,
-                transform: expanded ? 'translateX(0)' : 'translateX(-10px)',
-                transition: 'opacity 0.25s ease, transform 0.25s ease',
-                fontSize: '14px',
-                fontWeight: activeItem === item.id ? '500' : '400',
-                color: activeItem === item.id ? '#000' : '#9E9E9E',
-              }}>
-                {item.label}
-              </span>
             </li>
           ))}
         </ul>
