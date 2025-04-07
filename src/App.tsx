@@ -1,8 +1,32 @@
 import './App.css'
+import { useState } from 'react'
 import Sidebar from './components/Sidebar'
 import TitleBar from './components/TitleBar'
+import Dashboard from './components/Dashboard'
+import Inventario from './pages/Inventario'
 
 function App() {
+  const [activePage, setActivePage] = useState<string>('home');
+
+  // Función para cambiar la página activa
+  const handlePageChange = (pageId: string) => {
+    setActivePage(pageId);
+  };
+
+  // Renderizar la página activa
+  const renderActivePage = () => {
+    switch (activePage) {
+      case 'home':
+        return <Dashboard />;
+      case 'inventory':
+        return <Inventario />;
+      default:
+        return <div className="flex items-center justify-center h-full">
+          <p className="text-xl text-gray-500">Página en desarrollo</p>
+        </div>;
+    }
+  };
+
   return (
     <div style={{ 
       display: 'flex', 
@@ -17,7 +41,7 @@ function App() {
       bottom: 0
     }}>
       <TitleBar />
-      <Sidebar />
+      <Sidebar onItemClick={handlePageChange} activePage={activePage} />
       <div style={{ 
         flex: 1, 
         padding: '20px',
@@ -26,7 +50,7 @@ function App() {
         height: '100%',
         position: 'relative'
       }}>
-        {/* Contenido principal - vacío por ahora */}
+        {renderActivePage()}
       </div>
     </div>
   )

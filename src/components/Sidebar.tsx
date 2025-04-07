@@ -7,6 +7,11 @@ interface SidebarItem {
   label: string;
 }
 
+interface SidebarProps {
+  onItemClick?: (id: string) => void;
+  activePage?: string;
+}
+
 // Definir CSS como objeto para animaciones y estilos
 const styles = {
   sidebarHover: {
@@ -20,9 +25,9 @@ const styles = {
   }
 };
 
-function Sidebar() {
+function Sidebar({ onItemClick, activePage = 'home' }: SidebarProps) {
   const [expanded, setExpanded] = useState(false);
-  const [activeItem, setActiveItem] = useState('home');
+  const [activeItem, setActiveItem] = useState(activePage);
   const [prevActiveItem, setPrevActiveItem] = useState('');
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -45,6 +50,13 @@ function Sidebar() {
   
   // Set a timer to handle hover delay
   const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Actualizar activeItem cuando cambia activePage desde las props
+  useEffect(() => {
+    if (activePage !== activeItem) {
+      setActiveItem(activePage);
+    }
+  }, [activePage]);
 
   const handleMouseEnter = () => {
     // Clear any existing timer
@@ -98,6 +110,12 @@ function Sidebar() {
     // Guardar el ítem activo anterior
     setPrevActiveItem(activeItem);
     setActiveItem(id);
+    
+    // Llamar a la función onItemClick de las props si existe
+    if (onItemClick) {
+      onItemClick(id);
+    }
+    
     // On mobile, clicking an item collapses the sidebar
     if (isMobile && expanded) {
       setExpanded(false);
