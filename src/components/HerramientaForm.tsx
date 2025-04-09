@@ -1,38 +1,32 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { ArrowLeftIcon, PhotoIcon, SparklesIcon, DocumentIcon, ChatBubbleBottomCenterTextIcon } from '@heroicons/react/24/outline';
 import { useInventario } from '../lib/hooks';
 import { uploadImageToSupabase, generateQRCode } from '../lib/hooks';
 import QRCodeModal from './QRCodeModal';
 import { supabase } from '../lib/supabase';
 
-// Estilo global para aplicar Poppins a todo el componente
-const globalStyles = {
-  fontFamily: "'Poppins', sans-serif",
-};
-
-// Tipos para materiales
-export interface MaterialForm {
+// Tipos para herramientas
+export interface HerramientaForm {
   nombre: string;
-  referencia: string;
-  unidades: string;
-  stock: string;
-  stockMinimo: string;
-  precio: string;
-  categoria: string;
-  proveedor: string;
-  descripcion: string;
+  modelo: string;
+  numeroSerie: string;
+  estado: string;
   fechaAdquisicion: string;
+  ultimoMantenimiento: string;
+  proximoMantenimiento: string;
   ubicacion: string;
+  responsable: string;
+  descripcion: string;
   imagenUrl?: string;
   qrCode?: string;
 }
 
-interface MaterialFormProps {
+interface HerramientaFormProps {
   onClose: () => void;
   isClosing: boolean;
 }
 
-function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
+function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [loadingAI, setLoadingAI] = useState(false);
@@ -51,38 +45,38 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
   // Usamos el hook personalizado para inventario
   const { addInventarioItem } = useInventario();
   
-  // Estado para el formulario de materiales con campos adicionales
-  const [materialForm, setMaterialForm] = useState<MaterialForm>({
+  // Estado para errores del servidor
+  const [serverError, setServerError] = useState<string | null>(null);
+  
+  // Estado para el formulario de herramientas
+  const [herramientaForm, setHerramientaForm] = useState<HerramientaForm>({
     nombre: '',
-    referencia: '',
-    unidades: '',
-    stock: '',
-    stockMinimo: '',
-    precio: '',
-    categoria: '',
-    proveedor: '',
-    descripcion: '',
+    modelo: '',
+    numeroSerie: '',
+    estado: '',
     fechaAdquisicion: '',
+    ultimoMantenimiento: '',
+    proximoMantenimiento: '',
     ubicacion: '',
+    responsable: '',
+    descripcion: ''
   });
 
   // Estado para errores de validación
-  const [formErrors, setFormErrors] = useState<Partial<Record<keyof MaterialForm, string>>>({});
-  // Estado para mensajes de errores del servidor
-  const [serverError, setServerError] = useState<string | null>(null);
+  const [formErrors, setFormErrors] = useState<Partial<Record<keyof HerramientaForm, string>>>({});
 
   // Estado para previsualización de imagen
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  const handleMaterialChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleHerramientaChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setMaterialForm(prev => ({
+    setHerramientaForm(prev => ({
       ...prev,
       [name]: value
     }));
     
     // Limpiar error cuando el usuario empieza a escribir
-    if (formErrors[name as keyof MaterialForm]) {
+    if (formErrors[name as keyof HerramientaForm]) {
       setFormErrors(prev => ({
         ...prev,
         [name]: ''
@@ -105,7 +99,7 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
         const imageUrl = await uploadImageToSupabase(file);
         
         if (imageUrl) {
-          setMaterialForm(prev => ({
+          setHerramientaForm(prev => ({
             ...prev,
             imagenUrl: imageUrl
           }));
@@ -130,18 +124,17 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
       // Simulación de carga - en producción, aquí iría una llamada a la API de IA
       // que procesaría el PDF y extraería la información
       setTimeout(() => {
-        setMaterialForm({
-          nombre: 'Piel Sintética Ecológica',
-          referencia: 'PSE-2023-789',
-          unidades: 'metros cuadrados',
-          stock: '85',
-          stockMinimo: '20',
-          precio: '32.75',
-          categoria: 'Textil',
-          proveedor: 'EcoMateriales S.L.',
-          descripcion: 'Material sintético de alta calidad con apariencia de cuero. Impermeable y resistente a manchas. Ideal para calzado casual y bolsos. Disponible en varios colores.',
+        setHerramientaForm({
+          nombre: 'Taladro Inalámbrico Industrial',
+          modelo: 'DWX-2000',
+          numeroSerie: 'TI-2023-456',
+          estado: 'Excelente',
           fechaAdquisicion: new Date().toISOString().split('T')[0],
-          ubicacion: 'Almacén B, Estante 2',
+          ultimoMantenimiento: new Date().toISOString().split('T')[0],
+          proximoMantenimiento: new Date(Date.now() + 90*24*60*60*1000).toISOString().split('T')[0],
+          ubicacion: 'Taller principal, armario 3',
+          responsable: 'Juan García',
+          descripcion: 'Taladro inalámbrico de uso industrial con batería de litio de larga duración. Incluye dos baterías y cargador rápido. Ideal para trabajos de precisión.',
         });
         
         setLoadingAI(false);
@@ -165,18 +158,17 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
     // Simulación de procesamiento - aquí la IA analizaría el texto
     setTimeout(() => {
       // Ejemplo de extracción de información del texto
-      setMaterialForm({
-        nombre: 'Corcho Natural Premium',
-        referencia: 'CNP-2023-789',
-        unidades: 'láminas',
-        stock: '50',
-        stockMinimo: '15',
-        precio: '28.99',
-        categoria: 'Otros',
-        proveedor: 'Corcheras Ibéricas S.L.',
-        descripcion: 'Material de corcho natural para plantillas. Proporiona amortiguación y es antibacteriano. Espesor de 3mm. Ideal para plantillas de calzado de alta gama.',
-        fechaAdquisicion: new Date().toISOString().split('T')[0],
-        ubicacion: 'Almacén C, Estante 2',
+      setHerramientaForm({
+        nombre: 'Sierra Circular Profesional',
+        modelo: 'SC-1500',
+        numeroSerie: 'SCP-2023-789',
+        estado: 'Bueno',
+        fechaAdquisicion: new Date(Date.now() - 180*24*60*60*1000).toISOString().split('T')[0],
+        ultimoMantenimiento: new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0],
+        proximoMantenimiento: new Date(Date.now() + 60*24*60*60*1000).toISOString().split('T')[0],
+        ubicacion: 'Taller de corte, estante 2',
+        responsable: 'Ana Martínez',
+        descripcion: 'Sierra circular profesional con disco de 7 pulgadas. Potencia de 1500W. Incluye guía de corte y protector de seguridad. Velocidad ajustable.',
       });
       
       setRawText('');
@@ -202,24 +194,16 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
   };
 
   const validateForm = (): boolean => {
-    const errors: Partial<Record<keyof MaterialForm, string>> = {};
+    const errors: Partial<Record<keyof HerramientaForm, string>> = {};
     
     // Validar campos requeridos
-    if (!materialForm.nombre.trim()) errors.nombre = 'El nombre es obligatorio';
-    if (!materialForm.stock.trim()) errors.stock = 'El stock es obligatorio';
-    
-    // Validar que stock y precio sean números
-    if (materialForm.stock && !/^\d+$/.test(materialForm.stock)) 
-      errors.stock = 'El stock debe ser un número';
-    
-    if (materialForm.precio && !/^\d+(\.\d{1,2})?$/.test(materialForm.precio)) 
-      errors.precio = 'El precio debe ser un número válido';
+    if (!herramientaForm.nombre.trim()) errors.nombre = 'El nombre es obligatorio';
     
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmitMaterial = async (e: React.FormEvent) => {
+  const handleSubmitHerramienta = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!validateForm()) {
@@ -231,27 +215,26 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
     
     try {
       // Transformar los campos a formato snake_case para la base de datos
-      const materialData = {
-        nombre: materialForm.nombre,
-        referencia: materialForm.referencia,
-        unidades: materialForm.unidades,
-        stock: materialForm.stock,
-        stock_minimo: materialForm.stockMinimo,
-        precio: materialForm.precio,
-        categoria: materialForm.categoria,
-        proveedor: materialForm.proveedor,
-        descripcion: materialForm.descripcion,
-        fecha_adquisicion: materialForm.fechaAdquisicion,
-        ubicacion: materialForm.ubicacion,
-        imagen_url: materialForm.imagenUrl
+      const herramientaData = {
+        nombre: herramientaForm.nombre,
+        modelo: herramientaForm.modelo,
+        numero_serie: herramientaForm.numeroSerie,
+        estado: herramientaForm.estado,
+        fecha_adquisicion: herramientaForm.fechaAdquisicion,
+        ultimo_mantenimiento: herramientaForm.ultimoMantenimiento,
+        proximo_mantenimiento: herramientaForm.proximoMantenimiento,
+        ubicacion: herramientaForm.ubicacion,
+        responsable: herramientaForm.responsable,
+        descripcion: herramientaForm.descripcion,
+        imagen_url: herramientaForm.imagenUrl
       };
       
-      // Usar el hook de inventario para agregar el material
+      // Usar el hook de inventario para agregar la herramienta
       // El código QR se genera y guarda automáticamente dentro del hook
-      const result = await addInventarioItem('material', materialData);
+      const result = await addInventarioItem('herramienta', herramientaData);
       
       if (result && result.id) {
-        console.log('Material guardado con éxito:', result);
+        console.log('Herramienta guardada con éxito:', result);
         
         // El QR ya fue generado y guardado en el hook, solo necesitamos obtenerlo para mostrar
         // Si el resultado tiene la URL del QR, usamos esa
@@ -260,7 +243,7 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
         } else {
           // Si por alguna razón no tiene el QR, generamos uno solo para mostrar
           // pero no lo guardamos de nuevo
-          const qrCode = await generateQRCode('material', result.id);
+          const qrCode = await generateQRCode('herramienta', result.id);
           setQrCodeUrl(qrCode);
         }
         
@@ -269,25 +252,14 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
         // Mostrar modal con el código QR
         setShowQrModal(true);
       } else {
-        setServerError('No se pudo guardar el material. Intente nuevamente.');
+        setServerError('No se pudo guardar la herramienta. Intente nuevamente.');
       }
     } catch (error) {
-      console.error('Error al guardar el material:', error);
+      console.error('Error al guardar la herramienta:', error);
       setServerError('Ocurrió un error al guardar. Intente nuevamente.');
     } finally {
       setIsSaving(false);
     }
-  };
-
-  // Función para cerrar el modal QR
-  const handleCloseQrModal = () => {
-    setIsQrModalClosing(true);
-    setTimeout(() => {
-      setShowQrModal(false);
-      setIsQrModalClosing(false);
-      // Cerrar el formulario después de mostrar el QR
-      onClose();
-    }, 300);
   };
 
   // Gestionar el menú de opciones de IA
@@ -307,43 +279,50 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
     triggerPdfInput();
   };
 
-  // Completar con IA automáticamente (función original)
+  // Completar con IA automáticamente
   const completeWithAI = () => {
     setLoadingAI(true);
     setShowAIOptions(false);
     
     // Simulación de carga - en producción, aquí iría una llamada a la API de IA
     setTimeout(() => {
-      setMaterialForm({
-        nombre: 'Cuero Vacuno Premium',
-        referencia: 'CV-2023-456',
-        unidades: 'metros cuadrados',
-        stock: '120',
-        stockMinimo: '30',
-        precio: '45.50',
-        categoria: 'Cuero',
-        proveedor: 'Curtidos Superiores S.A.',
-        descripcion: 'Cuero vacuno de alta calidad, curtido al vegetal. Ideal para la fabricación de calzado de gama alta. Resistente al desgaste y con un acabado premium. Grosor de 2mm. Color marrón oscuro.',
+      setHerramientaForm({
+        nombre: 'Máquina de Coser Industrial',
+        modelo: 'MSI-5000',
+        numeroSerie: 'MCI-2023-123',
+        estado: 'Nuevo',
         fechaAdquisicion: new Date().toISOString().split('T')[0],
-        ubicacion: 'Almacén A, Estante 3',
+        ultimoMantenimiento: new Date().toISOString().split('T')[0],
+        proximoMantenimiento: new Date(Date.now() + 180*24*60*60*1000).toISOString().split('T')[0],
+        ubicacion: 'Área de producción, sección 3',
+        responsable: 'María López',
+        descripcion: 'Máquina de coser industrial de alta velocidad. Ideal para trabajos con cuero y materiales gruesos. Incluye 10 tipos de puntadas diferentes y sistema de lubricación automática.',
       });
       
       setLoadingAI(false);
     }, 1500);
   };
 
-  // Opciones de categorías para el select
-  const categorias = [
-    'Cuero',
-    'Textil',
-    'Hilo',
-    'Adhesivo',
-    'Suela',
-    'Hebilla',
-    'Ornamento',
-    'Plantilla',
-    'Otros'
+  // Opciones de estados para el select
+  const estados = [
+    'Nuevo',
+    'Excelente',
+    'Bueno',
+    'Regular',
+    'Necesita reparación',
+    'Fuera de servicio'
   ];
+
+  // Función para cerrar el modal QR
+  const handleCloseQrModal = () => {
+    setIsQrModalClosing(true);
+    setTimeout(() => {
+      setShowQrModal(false);
+      setIsQrModalClosing(false);
+      // Cerrar el formulario después de mostrar el QR
+      onClose();
+    }, 300);
+  };
 
   return (
     <div 
@@ -381,7 +360,7 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
           >
             <ArrowLeftIcon style={{ width: '20px', height: '20px', color: '#666' }} />
           </button>
-          <h2 style={{ fontSize: '20px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>Agregar material</h2>
+          <h2 style={{ fontSize: '20px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>Agregar herramienta</h2>
         </div>
 
         <div style={{ position: 'relative' }}>
@@ -554,17 +533,17 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
             >
               <ArrowLeftIcon style={{ width: '20px', height: '20px', color: '#666' }} />
             </button>
-            <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>Ingresar descripción del material</h2>
+            <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>Ingresar descripción de la herramienta</h2>
           </div>
           
           <p style={{ fontSize: '14px', color: '#666', marginBottom: '16px', fontFamily: "'Poppins', sans-serif" }}>
-            Describe el material con todos los detalles que puedas (nombre, tipo, características, cantidad, precio, etc.) y la IA extraerá la información para completar el formulario.
+            Describe la herramienta con todos los detalles que puedas (nombre, modelo, características, estado, etc.) y la IA extraerá la información para completar el formulario.
           </p>
           
           <textarea
             value={rawText}
             onChange={handleRawTextChange}
-            placeholder="Ej: 50 láminas de corcho natural premium de 3mm de espesor para plantillas. Precio unitario 28.99€. Proveedor: Corcheras Ibéricas S.L. Son antibacterianas e ideales para calzado de alta gama..."
+            placeholder="Ej: Sierra circular profesional modelo SC-1500, número de serie SCP-2023-789, en buen estado. Adquirida hace 6 meses, último mantenimiento hace un mes. Está a cargo de Ana Martínez y se encuentra en el taller de corte..."
             style={{
               width: '100%',
               padding: '12px',
@@ -642,7 +621,7 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
         </div>
       )}
       
-      <form onSubmit={handleSubmitMaterial}>
+      <form onSubmit={handleSubmitHerramienta}>
         <div style={{ display: 'flex', gap: '24px', marginBottom: '20px' }}>
           <div 
             style={{ 
@@ -671,13 +650,13 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
               <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-                Nombre material <span style={{ color: 'red' }}>*</span>
+                Nombre herramienta <span style={{ color: 'red' }}>*</span>
               </label>
               <input
                 type="text"
                 name="nombre"
-                value={materialForm.nombre}
-                onChange={handleMaterialChange}
+                value={herramientaForm.nombre}
+                onChange={handleHerramientaChange}
                 style={{
                   width: '100%',
                   padding: '10px',
@@ -733,13 +712,13 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
         <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Referencia
+              Modelo
             </label>
             <input
               type="text"
-              name="referencia"
-              value={materialForm.referencia}
-              onChange={handleMaterialChange}
+              name="modelo"
+              value={herramientaForm.modelo}
+              onChange={handleHerramientaChange}
               style={{
                 width: '100%',
                 padding: '10px',
@@ -753,14 +732,13 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
           
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Unidades
+              Número de serie
             </label>
             <input
               type="text"
-              name="unidades"
-              value={materialForm.unidades}
-              placeholder="metros, kg, litros..."
-              onChange={handleMaterialChange}
+              name="numeroSerie"
+              value={herramientaForm.numeroSerie}
+              onChange={handleHerramientaChange}
               style={{
                 width: '100%',
                 padding: '10px',
@@ -774,108 +752,12 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
           
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Proveedor
-            </label>
-            <input
-              type="text"
-              name="proveedor"
-              value={materialForm.proveedor}
-              onChange={handleMaterialChange}
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: '1px solid #ddd',
-                fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            />
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Stock actual <span style={{ color: 'red' }}>*</span>
-            </label>
-            <input
-              type="text"
-              name="stock"
-              value={materialForm.stock}
-              onChange={handleMaterialChange}
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: formErrors.stock ? '1px solid red' : '1px solid #ddd',
-                fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            />
-            {formErrors.stock && (
-              <p style={{ color: 'red', fontSize: '12px', margin: '4px 0 0', fontFamily: "'Poppins', sans-serif" }}>
-                {formErrors.stock}
-              </p>
-            )}
-          </div>
-          
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Stock mínimo
-            </label>
-            <input
-              type="text"
-              name="stockMinimo"
-              value={materialForm.stockMinimo}
-              onChange={handleMaterialChange}
-              placeholder="Cantidad para alerta"
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: '1px solid #ddd',
-                fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            />
-          </div>
-          
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Precio
-            </label>
-            <input
-              type="text"
-              name="precio"
-              value={materialForm.precio}
-              onChange={handleMaterialChange}
-              placeholder="0.00"
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: formErrors.precio ? '1px solid red' : '1px solid #ddd',
-                fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            />
-            {formErrors.precio && (
-              <p style={{ color: 'red', fontSize: '12px', margin: '4px 0 0', fontFamily: "'Poppins', sans-serif" }}>
-                {formErrors.precio}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Categoría
+              Estado
             </label>
             <select
-              name="categoria"
-              value={materialForm.categoria}
-              onChange={handleMaterialChange}
+              name="estado"
+              value={herramientaForm.estado}
+              onChange={handleHerramientaChange}
               style={{
                 width: '100%',
                 padding: '10px',
@@ -886,13 +768,15 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
                 fontFamily: "'Poppins', sans-serif"
               }}
             >
-              <option value="">Seleccionar categoría</option>
-              {categorias.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
+              <option value="">Seleccionar estado</option>
+              {estados.map(estado => (
+                <option key={estado} value={estado}>{estado}</option>
               ))}
             </select>
           </div>
-          
+        </div>
+
+        <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
               Fecha de adquisición
@@ -900,8 +784,8 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
             <input
               type="date"
               name="fechaAdquisicion"
-              value={materialForm.fechaAdquisicion}
-              onChange={handleMaterialChange}
+              value={herramientaForm.fechaAdquisicion}
+              onChange={handleHerramientaChange}
               style={{
                 width: '100%',
                 padding: '10px',
@@ -915,14 +799,76 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
           
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
+              Último mantenimiento
+            </label>
+            <input
+              type="date"
+              name="ultimoMantenimiento"
+              value={herramientaForm.ultimoMantenimiento}
+              onChange={handleHerramientaChange}
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '8px',
+                border: '1px solid #ddd',
+                fontSize: '14px',
+                fontFamily: "'Poppins', sans-serif"
+              }}
+            />
+          </div>
+          
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
+              Próximo mantenimiento
+            </label>
+            <input
+              type="date"
+              name="proximoMantenimiento"
+              value={herramientaForm.proximoMantenimiento}
+              onChange={handleHerramientaChange}
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '8px',
+                border: '1px solid #ddd',
+                fontSize: '14px',
+                fontFamily: "'Poppins', sans-serif"
+              }}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
               Ubicación
             </label>
             <input
               type="text"
               name="ubicacion"
-              value={materialForm.ubicacion}
-              onChange={handleMaterialChange}
-              placeholder="Almacén, estante..."
+              value={herramientaForm.ubicacion}
+              onChange={handleHerramientaChange}
+              placeholder="ej: Taller principal, estante 2"
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '8px',
+                border: '1px solid #ddd',
+                fontSize: '14px',
+                fontFamily: "'Poppins', sans-serif"
+              }}
+            />
+          </div>
+          
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
+              Responsable
+            </label>
+            <input
+              type="text"
+              name="responsable"
+              value={herramientaForm.responsable}
+              onChange={handleHerramientaChange}
               style={{
                 width: '100%',
                 padding: '10px',
@@ -941,9 +887,9 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
           </label>
           <textarea
             name="descripcion"
-            value={materialForm.descripcion}
-            onChange={handleMaterialChange}
-            placeholder="Características, observaciones, etc."
+            value={herramientaForm.descripcion}
+            onChange={handleHerramientaChange}
+            placeholder="Características, observaciones, instrucciones de uso, etc."
             style={{
               width: '100%',
               padding: '10px',
@@ -1005,7 +951,7 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
             onMouseEnter={(e) => !isSaving && (e.currentTarget.style.transform = 'translateY(-2px)')}
             onMouseLeave={(e) => !isSaving && (e.currentTarget.style.transform = 'translateY(0)')}
           >
-            {isSaving ? 'Guardando...' : 'Añadir material'}
+            {isSaving ? 'Guardando...' : 'Añadir herramienta'}
           </button>
         </div>
       </form>
@@ -1014,8 +960,8 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
       {showQrModal && (
         <QRCodeModal
           qrUrl={qrCodeUrl}
-          itemName={materialForm.nombre}
-          itemType="material"
+          itemName={herramientaForm.nombre}
+          itemType="herramienta"
           itemId={savedItemId}
           onClose={handleCloseQrModal}
           isClosing={isQrModalClosing}
@@ -1025,4 +971,4 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
   );
 }
 
-export default MaterialFormComponent; 
+export default HerramientaFormComponent; 

@@ -1,38 +1,32 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { ArrowLeftIcon, PhotoIcon, SparklesIcon, DocumentIcon, ChatBubbleBottomCenterTextIcon } from '@heroicons/react/24/outline';
 import { useInventario } from '../lib/hooks';
 import { uploadImageToSupabase, generateQRCode } from '../lib/hooks';
 import QRCodeModal from './QRCodeModal';
 import { supabase } from '../lib/supabase';
 
-// Estilo global para aplicar Poppins a todo el componente
-const globalStyles = {
-  fontFamily: "'Poppins', sans-serif",
-};
-
-// Tipos para materiales
-export interface MaterialForm {
+// Tipos para productos
+export interface ProductoForm {
   nombre: string;
-  referencia: string;
-  unidades: string;
+  precio: string;
   stock: string;
   stockMinimo: string;
-  precio: string;
   categoria: string;
-  proveedor: string;
   descripcion: string;
-  fechaAdquisicion: string;
-  ubicacion: string;
+  tallas: string;
+  colores: string;
+  tiempoFabricacion: string;
+  destacado: boolean;
   imagenUrl?: string;
   qrCode?: string;
 }
 
-interface MaterialFormProps {
+interface ProductoFormProps {
   onClose: () => void;
   isClosing: boolean;
 }
 
-function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
+function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [loadingAI, setLoadingAI] = useState(false);
@@ -51,43 +45,51 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
   // Usamos el hook personalizado para inventario
   const { addInventarioItem } = useInventario();
   
-  // Estado para el formulario de materiales con campos adicionales
-  const [materialForm, setMaterialForm] = useState<MaterialForm>({
+  // Estado para errores del servidor
+  const [serverError, setServerError] = useState<string | null>(null);
+  
+  // Estado para el formulario de productos
+  const [productoForm, setProductoForm] = useState<ProductoForm>({
     nombre: '',
-    referencia: '',
-    unidades: '',
+    precio: '',
     stock: '',
     stockMinimo: '',
-    precio: '',
     categoria: '',
-    proveedor: '',
     descripcion: '',
-    fechaAdquisicion: '',
-    ubicacion: '',
+    tallas: '',
+    colores: '',
+    tiempoFabricacion: '',
+    destacado: false
   });
 
   // Estado para errores de validación
-  const [formErrors, setFormErrors] = useState<Partial<Record<keyof MaterialForm, string>>>({});
-  // Estado para mensajes de errores del servidor
-  const [serverError, setServerError] = useState<string | null>(null);
+  const [formErrors, setFormErrors] = useState<Partial<Record<keyof ProductoForm, string>>>({});
 
   // Estado para previsualización de imagen
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  const handleMaterialChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleProductoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setMaterialForm(prev => ({
+    setProductoForm(prev => ({
       ...prev,
       [name]: value
     }));
     
     // Limpiar error cuando el usuario empieza a escribir
-    if (formErrors[name as keyof MaterialForm]) {
+    if (formErrors[name as keyof ProductoForm]) {
       setFormErrors(prev => ({
         ...prev,
         [name]: ''
       }));
     }
+  };
+
+  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, checked } = e.target;
+    setProductoForm(prev => ({
+      ...prev,
+      [name]: checked
+    }));
   };
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -105,7 +107,7 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
         const imageUrl = await uploadImageToSupabase(file);
         
         if (imageUrl) {
-          setMaterialForm(prev => ({
+          setProductoForm(prev => ({
             ...prev,
             imagenUrl: imageUrl
           }));
@@ -130,18 +132,17 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
       // Simulación de carga - en producción, aquí iría una llamada a la API de IA
       // que procesaría el PDF y extraería la información
       setTimeout(() => {
-        setMaterialForm({
-          nombre: 'Piel Sintética Ecológica',
-          referencia: 'PSE-2023-789',
-          unidades: 'metros cuadrados',
-          stock: '85',
-          stockMinimo: '20',
-          precio: '32.75',
-          categoria: 'Textil',
-          proveedor: 'EcoMateriales S.L.',
-          descripcion: 'Material sintético de alta calidad con apariencia de cuero. Impermeable y resistente a manchas. Ideal para calzado casual y bolsos. Disponible en varios colores.',
-          fechaAdquisicion: new Date().toISOString().split('T')[0],
-          ubicacion: 'Almacén B, Estante 2',
+        setProductoForm({
+          nombre: 'Botas Elegantes de Cuero',
+          precio: '89.99',
+          stock: '35',
+          stockMinimo: '10',
+          categoria: 'Botas',
+          descripcion: 'Botas de cuero genuino con acabado premium. Forro interior térmico y suela antideslizante. Ideales para uso diario o casual. Resistentes al agua y durables.',
+          tallas: '36, 37, 38, 39, 40, 41',
+          colores: 'Negro, Marrón, Camel',
+          tiempoFabricacion: '7-10 días',
+          destacado: true
         });
         
         setLoadingAI(false);
@@ -165,18 +166,17 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
     // Simulación de procesamiento - aquí la IA analizaría el texto
     setTimeout(() => {
       // Ejemplo de extracción de información del texto
-      setMaterialForm({
-        nombre: 'Corcho Natural Premium',
-        referencia: 'CNP-2023-789',
-        unidades: 'láminas',
-        stock: '50',
+      setProductoForm({
+        nombre: 'Zapatos Deportivos Ultra Light',
+        precio: '64.50',
+        stock: '48',
         stockMinimo: '15',
-        precio: '28.99',
-        categoria: 'Otros',
-        proveedor: 'Corcheras Ibéricas S.L.',
-        descripcion: 'Material de corcho natural para plantillas. Proporiona amortiguación y es antibacteriano. Espesor de 3mm. Ideal para plantillas de calzado de alta gama.',
-        fechaAdquisicion: new Date().toISOString().split('T')[0],
-        ubicacion: 'Almacén C, Estante 2',
+        categoria: 'Calzado deportivo',
+        descripcion: 'Zapatos deportivos ultraligeros con tecnología de amortiguación avanzada. Parte superior de malla transpirable y suela flexible de goma. Ideales para correr y entrenar. Disponibles en varios colores y tallas.',
+        tallas: '38, 39, 40, 41, 42, 43, 44',
+        colores: 'Negro, Azul, Rojo, Gris',
+        tiempoFabricacion: '5-7 días',
+        destacado: true
       });
       
       setRawText('');
@@ -202,24 +202,24 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
   };
 
   const validateForm = (): boolean => {
-    const errors: Partial<Record<keyof MaterialForm, string>> = {};
+    const errors: Partial<Record<keyof ProductoForm, string>> = {};
     
     // Validar campos requeridos
-    if (!materialForm.nombre.trim()) errors.nombre = 'El nombre es obligatorio';
-    if (!materialForm.stock.trim()) errors.stock = 'El stock es obligatorio';
+    if (!productoForm.nombre.trim()) errors.nombre = 'El nombre es obligatorio';
+    if (!productoForm.precio.trim()) errors.precio = 'El precio es obligatorio';
     
     // Validar que stock y precio sean números
-    if (materialForm.stock && !/^\d+$/.test(materialForm.stock)) 
+    if (productoForm.stock && !/^\d+$/.test(productoForm.stock)) 
       errors.stock = 'El stock debe ser un número';
     
-    if (materialForm.precio && !/^\d+(\.\d{1,2})?$/.test(materialForm.precio)) 
+    if (productoForm.precio && !/^\d+(\.\d{1,2})?$/.test(productoForm.precio)) 
       errors.precio = 'El precio debe ser un número válido';
     
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmitMaterial = async (e: React.FormEvent) => {
+  const handleSubmitProducto = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!validateForm()) {
@@ -231,27 +231,26 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
     
     try {
       // Transformar los campos a formato snake_case para la base de datos
-      const materialData = {
-        nombre: materialForm.nombre,
-        referencia: materialForm.referencia,
-        unidades: materialForm.unidades,
-        stock: materialForm.stock,
-        stock_minimo: materialForm.stockMinimo,
-        precio: materialForm.precio,
-        categoria: materialForm.categoria,
-        proveedor: materialForm.proveedor,
-        descripcion: materialForm.descripcion,
-        fecha_adquisicion: materialForm.fechaAdquisicion,
-        ubicacion: materialForm.ubicacion,
-        imagen_url: materialForm.imagenUrl
+      const productoData = {
+        nombre: productoForm.nombre,
+        precio: productoForm.precio,
+        stock: productoForm.stock,
+        stock_minimo: productoForm.stockMinimo,
+        categoria: productoForm.categoria,
+        descripcion: productoForm.descripcion,
+        tallas: productoForm.tallas,
+        colores: productoForm.colores,
+        tiempo_fabricacion: productoForm.tiempoFabricacion,
+        destacado: productoForm.destacado,
+        imagen_url: productoForm.imagenUrl
       };
       
-      // Usar el hook de inventario para agregar el material
+      // Usar el hook de inventario para agregar el producto
       // El código QR se genera y guarda automáticamente dentro del hook
-      const result = await addInventarioItem('material', materialData);
+      const result = await addInventarioItem('producto', productoData);
       
       if (result && result.id) {
-        console.log('Material guardado con éxito:', result);
+        console.log('Producto guardado con éxito:', result);
         
         // El QR ya fue generado y guardado en el hook, solo necesitamos obtenerlo para mostrar
         // Si el resultado tiene la URL del QR, usamos esa
@@ -260,7 +259,7 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
         } else {
           // Si por alguna razón no tiene el QR, generamos uno solo para mostrar
           // pero no lo guardamos de nuevo
-          const qrCode = await generateQRCode('material', result.id);
+          const qrCode = await generateQRCode('producto', result.id);
           setQrCodeUrl(qrCode);
         }
         
@@ -269,10 +268,10 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
         // Mostrar modal con el código QR
         setShowQrModal(true);
       } else {
-        setServerError('No se pudo guardar el material. Intente nuevamente.');
+        setServerError('No se pudo guardar el producto. Intente nuevamente.');
       }
     } catch (error) {
-      console.error('Error al guardar el material:', error);
+      console.error('Error al guardar el producto:', error);
       setServerError('Ocurrió un error al guardar. Intente nuevamente.');
     } finally {
       setIsSaving(false);
@@ -307,25 +306,24 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
     triggerPdfInput();
   };
 
-  // Completar con IA automáticamente (función original)
+  // Completar con IA automáticamente
   const completeWithAI = () => {
     setLoadingAI(true);
     setShowAIOptions(false);
     
     // Simulación de carga - en producción, aquí iría una llamada a la API de IA
     setTimeout(() => {
-      setMaterialForm({
-        nombre: 'Cuero Vacuno Premium',
-        referencia: 'CV-2023-456',
-        unidades: 'metros cuadrados',
-        stock: '120',
-        stockMinimo: '30',
-        precio: '45.50',
-        categoria: 'Cuero',
-        proveedor: 'Curtidos Superiores S.A.',
-        descripcion: 'Cuero vacuno de alta calidad, curtido al vegetal. Ideal para la fabricación de calzado de gama alta. Resistente al desgaste y con un acabado premium. Grosor de 2mm. Color marrón oscuro.',
-        fechaAdquisicion: new Date().toISOString().split('T')[0],
-        ubicacion: 'Almacén A, Estante 3',
+      setProductoForm({
+        nombre: 'Zapatos Oxford Clásicos',
+        precio: '120.00',
+        stock: '25',
+        stockMinimo: '8',
+        categoria: 'Calzado formal',
+        descripcion: 'Zapatos Oxford de cuero genuino con acabado brillante. Diseño clásico y elegante con puntera refinada. Plantilla acolchada para mayor comodidad. Fabricación artesanal con materiales de primera calidad.',
+        tallas: '39, 40, 41, 42, 43, 44',
+        colores: 'Negro, Marrón oscuro',
+        tiempoFabricacion: '10-14 días',
+        destacado: true
       });
       
       setLoadingAI(false);
@@ -334,15 +332,15 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
 
   // Opciones de categorías para el select
   const categorias = [
-    'Cuero',
-    'Textil',
-    'Hilo',
-    'Adhesivo',
-    'Suela',
-    'Hebilla',
-    'Ornamento',
-    'Plantilla',
-    'Otros'
+    'Zapatos de hombre',
+    'Zapatos de mujer',
+    'Zapatos infantiles',
+    'Botas',
+    'Sandalias',
+    'Calzado deportivo',
+    'Calzado formal',
+    'Calzado de trabajo',
+    'Accesorios'
   ];
 
   return (
@@ -381,7 +379,7 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
           >
             <ArrowLeftIcon style={{ width: '20px', height: '20px', color: '#666' }} />
           </button>
-          <h2 style={{ fontSize: '20px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>Agregar material</h2>
+          <h2 style={{ fontSize: '20px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>Agregar producto</h2>
         </div>
 
         <div style={{ position: 'relative' }}>
@@ -554,17 +552,17 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
             >
               <ArrowLeftIcon style={{ width: '20px', height: '20px', color: '#666' }} />
             </button>
-            <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>Ingresar descripción del material</h2>
+            <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>Ingresar descripción del producto</h2>
           </div>
           
           <p style={{ fontSize: '14px', color: '#666', marginBottom: '16px', fontFamily: "'Poppins', sans-serif" }}>
-            Describe el material con todos los detalles que puedas (nombre, tipo, características, cantidad, precio, etc.) y la IA extraerá la información para completar el formulario.
+            Describe el producto con todos los detalles que puedas (nombre, características, tallas, colores, precio, etc.) y la IA extraerá la información para completar el formulario.
           </p>
           
           <textarea
             value={rawText}
             onChange={handleRawTextChange}
-            placeholder="Ej: 50 láminas de corcho natural premium de 3mm de espesor para plantillas. Precio unitario 28.99€. Proveedor: Corcheras Ibéricas S.L. Son antibacterianas e ideales para calzado de alta gama..."
+            placeholder="Ej: Zapatos deportivos ultraligeros para correr. Disponibles en tallas del 38 al 44 y en colores negro, azul, rojo y gris. Precio de venta 64,50€. Actualmente tenemos 48 unidades en stock. Se fabrican en 5-7 días..."
             style={{
               width: '100%',
               padding: '12px',
@@ -642,7 +640,7 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
         </div>
       )}
       
-      <form onSubmit={handleSubmitMaterial}>
+      <form onSubmit={handleSubmitProducto}>
         <div style={{ display: 'flex', gap: '24px', marginBottom: '20px' }}>
           <div 
             style={{ 
@@ -671,13 +669,13 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
               <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-                Nombre material <span style={{ color: 'red' }}>*</span>
+                Nombre producto <span style={{ color: 'red' }}>*</span>
               </label>
               <input
                 type="text"
                 name="nombre"
-                value={materialForm.nombre}
-                onChange={handleMaterialChange}
+                value={productoForm.nombre}
+                onChange={handleProductoChange}
                 style={{
                   width: '100%',
                   padding: '10px',
@@ -733,54 +731,65 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
         <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Referencia
+              Precio <span style={{ color: 'red' }}>*</span>
             </label>
             <input
               type="text"
-              name="referencia"
-              value={materialForm.referencia}
-              onChange={handleMaterialChange}
+              name="precio"
+              value={productoForm.precio}
+              onChange={handleProductoChange}
+              placeholder="0.00"
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '8px',
+                border: formErrors.precio ? '1px solid red' : '1px solid #ddd',
+                fontSize: '14px',
+                fontFamily: "'Poppins', sans-serif"
+              }}
+            />
+            {formErrors.precio && (
+              <p style={{ color: 'red', fontSize: '12px', margin: '4px 0 0', fontFamily: "'Poppins', sans-serif" }}>
+                {formErrors.precio}
+              </p>
+            )}
+          </div>
+          
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
+              Categoría
+            </label>
+            <select
+              name="categoria"
+              value={productoForm.categoria}
+              onChange={handleProductoChange}
               style={{
                 width: '100%',
                 padding: '10px',
                 borderRadius: '8px',
                 border: '1px solid #ddd',
                 fontSize: '14px',
+                backgroundColor: 'white',
                 fontFamily: "'Poppins', sans-serif"
               }}
-            />
+            >
+              <option value="">Seleccionar categoría</option>
+              {categorias.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
           </div>
           
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Unidades
+              Tiempo de fabricación
             </label>
             <input
               type="text"
-              name="unidades"
-              value={materialForm.unidades}
-              placeholder="metros, kg, litros..."
-              onChange={handleMaterialChange}
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: '1px solid #ddd',
-                fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            />
-          </div>
-          
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Proveedor
-            </label>
-            <input
-              type="text"
-              name="proveedor"
-              value={materialForm.proveedor}
-              onChange={handleMaterialChange}
+              name="tiempoFabricacion"
+              value={productoForm.tiempoFabricacion}
+              placeholder="ej: 3-5 días"
+              onChange={handleProductoChange}
               style={{
                 width: '100%',
                 padding: '10px',
@@ -796,13 +805,13 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
         <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Stock actual <span style={{ color: 'red' }}>*</span>
+              Stock actual
             </label>
             <input
               type="text"
               name="stock"
-              value={materialForm.stock}
-              onChange={handleMaterialChange}
+              value={productoForm.stock}
+              onChange={handleProductoChange}
               style={{
                 width: '100%',
                 padding: '10px',
@@ -826,8 +835,8 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
             <input
               type="text"
               name="stockMinimo"
-              value={materialForm.stockMinimo}
-              onChange={handleMaterialChange}
+              value={productoForm.stockMinimo}
+              onChange={handleProductoChange}
               placeholder="Cantidad para alerta"
               style={{
                 width: '100%',
@@ -842,66 +851,38 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
           
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Precio
+              Destacado
             </label>
-            <input
-              type="text"
-              name="precio"
-              value={materialForm.precio}
-              onChange={handleMaterialChange}
-              placeholder="0.00"
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: formErrors.precio ? '1px solid red' : '1px solid #ddd',
-                fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            />
-            {formErrors.precio && (
-              <p style={{ color: 'red', fontSize: '12px', margin: '4px 0 0', fontFamily: "'Poppins', sans-serif" }}>
-                {formErrors.precio}
-              </p>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', height: '41px' }}>
+              <input
+                type="checkbox"
+                name="destacado"
+                checked={productoForm.destacado}
+                onChange={handleCheckboxChange}
+                style={{
+                  width: '18px',
+                  height: '18px',
+                  marginRight: '8px'
+                }}
+              />
+              <span style={{ fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
+                Mostrar en página principal
+              </span>
+            </div>
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Categoría
-            </label>
-            <select
-              name="categoria"
-              value={materialForm.categoria}
-              onChange={handleMaterialChange}
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: '1px solid #ddd',
-                fontSize: '14px',
-                backgroundColor: 'white',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            >
-              <option value="">Seleccionar categoría</option>
-              {categorias.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Fecha de adquisición
+              Tallas disponibles
             </label>
             <input
-              type="date"
-              name="fechaAdquisicion"
-              value={materialForm.fechaAdquisicion}
-              onChange={handleMaterialChange}
+              type="text"
+              name="tallas"
+              value={productoForm.tallas}
+              onChange={handleProductoChange}
+              placeholder="ej: 35, 36, 37, 38, 39"
               style={{
                 width: '100%',
                 padding: '10px',
@@ -915,14 +896,14 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
           
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Ubicación
+              Colores disponibles
             </label>
             <input
               type="text"
-              name="ubicacion"
-              value={materialForm.ubicacion}
-              onChange={handleMaterialChange}
-              placeholder="Almacén, estante..."
+              name="colores"
+              value={productoForm.colores}
+              onChange={handleProductoChange}
+              placeholder="ej: Negro, Marrón, Beige"
               style={{
                 width: '100%',
                 padding: '10px',
@@ -941,9 +922,9 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
           </label>
           <textarea
             name="descripcion"
-            value={materialForm.descripcion}
-            onChange={handleMaterialChange}
-            placeholder="Características, observaciones, etc."
+            value={productoForm.descripcion}
+            onChange={handleProductoChange}
+            placeholder="Características, materiales, instrucciones de cuidado, etc."
             style={{
               width: '100%',
               padding: '10px',
@@ -1005,7 +986,7 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
             onMouseEnter={(e) => !isSaving && (e.currentTarget.style.transform = 'translateY(-2px)')}
             onMouseLeave={(e) => !isSaving && (e.currentTarget.style.transform = 'translateY(0)')}
           >
-            {isSaving ? 'Guardando...' : 'Añadir material'}
+            {isSaving ? 'Guardando...' : 'Añadir producto'}
           </button>
         </div>
       </form>
@@ -1014,8 +995,8 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
       {showQrModal && (
         <QRCodeModal
           qrUrl={qrCodeUrl}
-          itemName={materialForm.nombre}
-          itemType="material"
+          itemName={productoForm.nombre}
+          itemType="producto"
           itemId={savedItemId}
           onClose={handleCloseQrModal}
           isClosing={isQrModalClosing}
@@ -1025,4 +1006,4 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
   );
 }
 
-export default MaterialFormComponent; 
+export default ProductoFormComponent; 
