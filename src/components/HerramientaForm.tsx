@@ -4,6 +4,7 @@ import { useInventario } from '../lib/hooks';
 import { uploadImageToSupabase, generateQRCode } from '../lib/hooks';
 import QRCodeModal from './QRCodeModal';
 import { supabase } from '../lib/supabase';
+import axios from 'axios';
 
 // Tipos para herramientas
 export interface HerramientaForm {
@@ -68,6 +69,11 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
   // Estado para previsualización de imagen
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
+  // Estado para mostrar el texto extraído del PDF
+  const [extractedText, setExtractedText] = useState<string>('');
+  const [showExtractedText, setShowExtractedText] = useState(false);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+
   const handleHerramientaChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setHerramientaForm(prev => ({
@@ -115,30 +121,62 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
     }
   };
 
-  const handlePdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setLoadingAI(true);
       setShowAIOptions(false);
+      setOcrError(null);
       
-      // Simulación de carga - en producción, aquí iría una llamada a la API de IA
-      // que procesaría el PDF y extraería la información
-      setTimeout(() => {
-        setHerramientaForm({
-          nombre: 'Taladro Inalámbrico Industrial',
-          modelo: 'DWX-2000',
-          numeroSerie: 'TI-2023-456',
-          estado: 'Excelente',
-          fechaAdquisicion: new Date().toISOString().split('T')[0],
-          ultimoMantenimiento: new Date().toISOString().split('T')[0],
-          proximoMantenimiento: new Date(Date.now() + 90*24*60*60*1000).toISOString().split('T')[0],
-          ubicacion: 'Taller principal, armario 3',
-          responsable: 'Juan García',
-          descripcion: 'Taladro inalámbrico de uso industrial con batería de litio de larga duración. Incluye dos baterías y cargador rápido. Ideal para trabajos de precisión.',
+      try {
+        // Crear un objeto FormData para enviar el archivo
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        console.log('Enviando PDF al servidor OCR...');
+        
+        // Enviar el PDF al servidor OCR con mayor tiempo de timeout
+        const response = await axios.post('http://localhost:5000/ocr', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          },
+          timeout: 60000, // 60 segundos de timeout
         });
         
+        console.log('Respuesta recibida:', response);
+        
+        // Verificar si la respuesta es válida
+        if (response.data && response.data.text) {
+          // Obtener el texto extraído
+          const extractedText = response.data.text;
+          console.log('Texto extraído (primeros 100 caracteres):', extractedText.substring(0, 100));
+          setExtractedText(extractedText);
+          setShowExtractedText(true);
+        } else {
+          console.error('La respuesta no contiene el campo text esperado:', response.data);
+          setOcrError('La respuesta del servidor OCR no tiene el formato esperado.');
+        }
+      } catch (error: any) {
+        console.error('Error al procesar el PDF:', error);
+        
+        // Mostrar detalles específicos del error
+        if (error.response) {
+          // El servidor respondió con un código que no es 2xx
+          console.error('Error de respuesta del servidor:', error.response.data);
+          console.error('Código de estado:', error.response.status);
+          setOcrError(`Error del servidor OCR: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
+        } else if (error.request) {
+          // La solicitud se hizo pero no hubo respuesta
+          console.error('No hubo respuesta del servidor:', error.request);
+          setOcrError('No hay respuesta del servidor OCR. Verifica que esté en funcionamiento en http://localhost:5000');
+        } else {
+          // Algo sucedió al configurar la solicitud
+          console.error('Error al configurar la solicitud:', error.message);
+          setOcrError(`Error al procesar el PDF: ${error.message}`);
+        }
+      } finally {
         setLoadingAI(false);
-      }, 2000);
+      }
     }
   };
 
@@ -322,6 +360,11 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
       // Cerrar el formulario después de mostrar el QR
       onClose();
     }, 300);
+  };
+
+  // Función para cerrar el modal de texto extraído
+  const closeExtractedTextModal = () => {
+    setShowExtractedText(false);
   };
 
   return (
@@ -966,6 +1009,124 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
           onClose={handleCloseQrModal}
           isClosing={isQrModalClosing}
         />
+      )}
+      
+      {/* Modal para mostrar el texto extraído del PDF */}
+      {showExtractedText && (
+        <div 
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'white',
+            zIndex: 30,
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '24px',
+            borderRadius: '8px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+            <button
+              onClick={closeExtractedTextModal}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                marginRight: '12px',
+                borderRadius: '8px',
+                padding: '4px',
+              }}
+            >
+              <ArrowLeftIcon style={{ width: '20px', height: '20px', color: '#666' }} />
+            </button>
+            <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>Texto extraído del PDF</h2>
+          </div>
+          
+          <div 
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              padding: '16px',
+              backgroundColor: '#f9f9f9',
+              fontSize: '14px',
+              fontFamily: 'monospace',
+              whiteSpace: 'pre-wrap',
+              marginBottom: '20px',
+            }}
+            className="apple-scrollbar"
+          >
+            {extractedText || 'No se pudo extraer texto del documento.'}
+          </div>
+          
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
+            <button
+              onClick={closeExtractedTextModal}
+              style={{
+                backgroundColor: 'white',
+                color: '#666',
+                border: '1px solid #e0e0e0',
+                padding: '0 24px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 500,
+                height: '36px',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                fontFamily: "'Poppins', sans-serif",
+              }}
+            >
+              Cerrar
+            </button>
+            
+            <button
+              onClick={completeWithAI}
+              style={{
+                backgroundColor: 'white',
+                color: '#4F46E5',
+                border: '1px solid #e0e0e0',
+                padding: '0 24px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 500,
+                height: '36px',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                fontFamily: "'Poppins', sans-serif",
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+            >
+              <SparklesIcon style={{ width: '16px', height: '16px', marginRight: '6px', color: '#4F46E5' }} />
+              Procesar con IA
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Mostrar mensaje de error de OCR si existe */}
+      {ocrError && (
+        <div style={{ 
+          backgroundColor: 'rgba(220, 38, 38, 0.1)', 
+          color: '#DC2626', 
+          padding: '12px', 
+          borderRadius: '8px',
+          marginBottom: '16px',
+          fontSize: '14px',
+          fontFamily: "'Poppins', sans-serif"
+        }}>
+          {ocrError}
+        </div>
       )}
     </div>
   );
