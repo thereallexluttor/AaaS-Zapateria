@@ -4,7 +4,6 @@ import { useInventario } from '../lib/hooks';
 import { uploadImageToSupabase, generateQRCode } from '../lib/hooks';
 import QRCodeModal from './QRCodeModal';
 import { supabase } from '../lib/supabase';
-import axios from 'axios';
 
 // Tipos para herramientas
 export interface HerramientaForm {
@@ -72,7 +71,6 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
   // Estado para mostrar el texto extraído del PDF
   const [extractedText, setExtractedText] = useState<string>('');
   const [showExtractedText, setShowExtractedText] = useState(false);
-  const [ocrError, setOcrError] = useState<string | null>(null);
 
   const handleHerramientaChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -126,58 +124,106 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
     if (file) {
       setLoadingAI(true);
       setShowAIOptions(false);
-      setOcrError(null);
       
       try {
-        // Crear un objeto FormData para enviar el archivo
-        const formData = new FormData();
-        formData.append('file', file);
+        // Guardar temporalmente el archivo PDF para procesarlo con Python
+        const tempPath = await saveTemporaryFile(file);
         
-        console.log('Enviando PDF al servidor OCR...');
+        if (!tempPath) {
+          throw new Error('No se pudo guardar el archivo temporalmente');
+        }
         
-        // Enviar el PDF al servidor OCR con mayor tiempo de timeout
-        const response = await axios.post('http://localhost:5000/ocr', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          },
-          timeout: 60000, // 60 segundos de timeout
-        });
+        console.log('Enviando PDF para procesamiento OCR:', tempPath);
         
-        console.log('Respuesta recibida:', response);
+        // Llamar al procesamiento OCR usando IPC
+        const result = await window.ipcRenderer.invoke('process-pdf-ocr', tempPath);
         
-        // Verificar si la respuesta es válida
-        if (response.data && response.data.text) {
-          // Obtener el texto extraído
-          const extractedText = response.data.text;
-          console.log('Texto extraído (primeros 100 caracteres):', extractedText.substring(0, 100));
-          setExtractedText(extractedText);
+        console.log('Resultado del OCR:', result);
+        
+        if (result) {
+          // Determinar si la respuesta está en camelCase o snake_case
+          const hasCamelCase = result.numeroSerie !== undefined || 
+                               result.fechaAdquisicion !== undefined || 
+                               result.ultimoMantenimiento !== undefined || 
+                               result.proximoMantenimiento !== undefined;
+          
+          const hasSnakeCase = result.numero_serie !== undefined || 
+                               result.fecha_adquisicion !== undefined || 
+                               result.ultimo_mantenimiento !== undefined || 
+                               result.proximo_mantenimiento !== undefined;
+                               
+          // Actualizar el formulario con los datos extraídos, adaptando a los diferentes formatos
+          setHerramientaForm({
+            nombre: result.nombre || '',
+            modelo: result.modelo || '',
+            numeroSerie: hasCamelCase ? result.numeroSerie || '' : (hasSnakeCase ? result.numero_serie || '' : ''),
+            estado: result.estado || '',
+            fechaAdquisicion: hasCamelCase ? result.fechaAdquisicion || '' : (hasSnakeCase ? result.fecha_adquisicion || '' : ''),
+            ultimoMantenimiento: hasCamelCase ? result.ultimoMantenimiento || '' : (hasSnakeCase ? result.ultimo_mantenimiento || '' : ''),
+            proximoMantenimiento: hasCamelCase ? result.proximoMantenimiento || '' : (hasSnakeCase ? result.proximo_mantenimiento || '' : ''),
+            ubicacion: result.ubicacion || '',
+            responsable: result.responsable || '',
+            descripcion: result.descripcion || ''
+          });
+          
+          // Mostrar el texto extraído en su formato original JSON
+          if (typeof result === 'string') {
+            setExtractedText(result);
+          } else {
+            setExtractedText(JSON.stringify(result, null, 2));
+          }
+          
           setShowExtractedText(true);
         } else {
-          console.error('La respuesta no contiene el campo text esperado:', response.data);
-          setOcrError('La respuesta del servidor OCR no tiene el formato esperado.');
+          throw new Error('No se pudieron extraer datos del PDF');
         }
       } catch (error: any) {
         console.error('Error al procesar el PDF:', error);
         
-        // Mostrar detalles específicos del error
-        if (error.response) {
-          // El servidor respondió con un código que no es 2xx
-          console.error('Error de respuesta del servidor:', error.response.data);
-          console.error('Código de estado:', error.response.status);
-          setOcrError(`Error del servidor OCR: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
-        } else if (error.request) {
-          // La solicitud se hizo pero no hubo respuesta
-          console.error('No hubo respuesta del servidor:', error.request);
-          setOcrError('No hay respuesta del servidor OCR. Verifica que esté en funcionamiento en http://localhost:5000');
-        } else {
-          // Algo sucedió al configurar la solicitud
-          console.error('Error al configurar la solicitud:', error.message);
-          setOcrError(`Error al procesar el PDF: ${error.message}`);
-        }
+        // Crear datos de ejemplo en caso de error
+        const errorData = {
+          error: true,
+          message: `Error al procesar el PDF: ${error.message || 'Error desconocido'}`
+        };
+        
+        // Mostrar información sobre el error
+        setExtractedText(JSON.stringify(errorData, null, 2));
+        setShowExtractedText(true);
       } finally {
         setLoadingAI(false);
       }
     }
+  };
+
+  // Función para guardar temporalmente un archivo y obtener su ruta
+  const saveTemporaryFile = async (file: File): Promise<string | null> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          // Generar un nombre único para el archivo temporal
+          const tempFileName = `temp_${Date.now()}_${file.name}`;
+          
+          // Solicitar al proceso principal que guarde el archivo
+          const tempPath = await window.ipcRenderer.invoke(
+            'save-temp-file', 
+            {
+              fileName: tempFileName,
+              data: event.target?.result
+            }
+          );
+          
+          resolve(tempPath);
+        } catch (error) {
+          console.error('Error al guardar archivo temporal:', error);
+          reject(error);
+        }
+      };
+      reader.onerror = () => {
+        reject(new Error('No se pudo leer el archivo'));
+      };
+      reader.readAsArrayBuffer(file);
+    });
   };
 
   const handleRawTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -365,6 +411,46 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
   // Función para cerrar el modal de texto extraído
   const closeExtractedTextModal = () => {
     setShowExtractedText(false);
+  };
+
+  // Función para formatear los datos extraídos para mostrarlos de manera más amigable
+  const formatExtractedDataForDisplay = (jsonText: string) => {
+    try {
+      // Intentar parsear el JSON
+      const result = JSON.parse(jsonText);
+      
+      // Verificar si es un error o datos de ejemplo
+      if (result.nota && (result.nota.includes("ERROR") || result.nota.includes("ATENCIÓN"))) {
+        return jsonText;
+      }
+      
+      // Crear un objeto con los datos formateados para mostrar
+      const formattedData = {
+        "Información extraída del PDF": {
+          "Datos principales": {
+            "Nombre": result.nombre || result.nombreHerramienta || "",
+            "Modelo": result.modelo || "",
+            "Número de serie": result.numeroSerie || result.numero_serie || "",
+            "Estado": result.estado || ""
+          },
+          "Fechas": {
+            "Fecha de adquisición": result.fechaAdquisicion || result.fecha_adquisicion || "",
+            "Último mantenimiento": result.ultimoMantenimiento || result.ultimo_mantenimiento || "",
+            "Próximo mantenimiento": result.proximoMantenimiento || result.proximo_mantenimiento || ""
+          },
+          "Ubicación y responsable": {
+            "Ubicación": result.ubicacion || "",
+            "Responsable": result.responsable || ""
+          },
+          "Descripción": result.descripcion || ""
+        }
+      };
+      
+      return JSON.stringify(formattedData, null, 2);
+    } catch (error) {
+      console.error("Error al formatear los datos extraídos:", error);
+      return jsonText || 'No se pudo extraer texto del documento.';
+    }
   };
 
   return (
@@ -1044,14 +1130,16 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
             >
               <ArrowLeftIcon style={{ width: '20px', height: '20px', color: '#666' }} />
             </button>
-            <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>Texto extraído del PDF</h2>
+            <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>
+              Datos extraídos del PDF
+            </h2>
           </div>
           
           <div 
             style={{
               flex: 1,
               overflowY: 'auto',
-              border: '1px solid #ddd',
+              border: '2px solid #4F46E5',
               borderRadius: '8px',
               padding: '16px',
               backgroundColor: '#f9f9f9',
@@ -1059,73 +1147,48 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
               fontFamily: 'monospace',
               whiteSpace: 'pre-wrap',
               marginBottom: '20px',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
             }}
             className="apple-scrollbar"
           >
             {extractedText || 'No se pudo extraer texto del documento.'}
           </div>
           
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
-            <button
-              onClick={closeExtractedTextModal}
-              style={{
-                backgroundColor: 'white',
-                color: '#666',
-                border: '1px solid #e0e0e0',
-                padding: '0 24px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: 500,
-                height: '36px',
-                transition: 'all 0.2s ease',
-                display: 'flex',
-                alignItems: 'center',
-                fontFamily: "'Poppins', sans-serif",
-              }}
-            >
-              Cerrar
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px' }}>
+            <div>
+              <p style={{ 
+                fontSize: '14px', 
+                color: '#16A34A', 
+                fontFamily: "'Poppins', sans-serif", 
+                margin: '0 0 8px 0' 
+              }}>
+                Los datos extraídos han sido aplicados al formulario
+              </p>
+            </div>
             
-            <button
-              onClick={completeWithAI}
-              style={{
-                backgroundColor: 'white',
-                color: '#4F46E5',
-                border: '1px solid #e0e0e0',
-                padding: '0 24px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: 500,
-                height: '36px',
-                transition: 'all 0.2s ease',
-                display: 'flex',
-                alignItems: 'center',
-                fontFamily: "'Poppins', sans-serif",
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-              onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-            >
-              <SparklesIcon style={{ width: '16px', height: '16px', marginRight: '6px', color: '#4F46E5' }} />
-              Procesar con IA
-            </button>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={closeExtractedTextModal}
+                style={{
+                  backgroundColor: 'white',
+                  color: '#666',
+                  border: '1px solid #e0e0e0',
+                  padding: '0 24px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  height: '36px',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  fontFamily: "'Poppins', sans-serif",
+                }}
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
-        </div>
-      )}
-      
-      {/* Mostrar mensaje de error de OCR si existe */}
-      {ocrError && (
-        <div style={{ 
-          backgroundColor: 'rgba(220, 38, 38, 0.1)', 
-          color: '#DC2626', 
-          padding: '12px', 
-          borderRadius: '8px',
-          marginBottom: '16px',
-          fontSize: '14px',
-          fontFamily: "'Poppins', sans-serif"
-        }}>
-          {ocrError}
         </div>
       )}
     </div>
