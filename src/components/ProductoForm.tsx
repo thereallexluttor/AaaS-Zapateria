@@ -13,6 +13,7 @@ export interface ProductoForm {
   stockMinimo: string;
   categoria: string;
   descripcion: string;
+  materiales: string;
   tallas: string;
   colores: string;
   tiempoFabricacion: string;
@@ -65,6 +66,7 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
     stockMinimo: '',
     categoria: '',
     descripcion: '',
+    materiales: '',
     tallas: '',
     colores: '',
     tiempoFabricacion: '',
@@ -136,6 +138,7 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
             stockMinimo: prev.stockMinimo || result.stockMinimo || '',
             categoria: prev.categoria || result.categoria || '',
             descripcion: prev.descripcion || result.descripcion || '',
+            materiales: prev.materiales || result.materiales || '',
             tallas: prev.tallas || result.tallas || '',
             colores: prev.colores || result.colores || '',
             tiempoFabricacion: prev.tiempoFabricacion || result.tiempoFabricacion || '',
@@ -217,6 +220,7 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
             stockMinimo: prev.stockMinimo || result.stockMinimo || '',
             categoria: prev.categoria || result.categoria || '',
             descripcion: prev.descripcion || result.descripcion || '',
+            materiales: prev.materiales || result.materiales || '',
             tallas: prev.tallas || result.tallas || '',
             colores: prev.colores || result.colores || '',
             tiempoFabricacion: prev.tiempoFabricacion || result.tiempoFabricacion || '',
@@ -333,6 +337,7 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
           stockMinimo: prev.stockMinimo || result.stockMinimo || '',
           categoria: prev.categoria || result.categoria || '',
           descripcion: prev.descripcion || result.descripcion || '',
+          materiales: prev.materiales || result.materiales || '',
           tallas: prev.tallas || result.tallas || '',
           colores: prev.colores || result.colores || '',
           tiempoFabricacion: prev.tiempoFabricacion || result.tiempoFabricacion || '',
@@ -440,6 +445,7 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
         stock_minimo: productoForm.stockMinimo,
         categoria: productoForm.categoria,
         descripcion: productoForm.descripcion,
+        materiales: productoForm.materiales,
         tallas: productoForm.tallas,
         colores: productoForm.colores,
         tiempo_fabricacion: productoForm.tiempoFabricacion,
@@ -529,7 +535,10 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
             "Tallas disponibles": result.tallas || "",
             "Colores disponibles": result.colores || ""
           },
-          "Descripción": result.descripcion || ""
+          "Descripción": result.descripcion || "",
+          "Materiales": {
+            "Materiales": result.materiales || ""
+          }
         }
       };
       
@@ -572,6 +581,7 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
         stockMinimo: prev.stockMinimo || '8',
         categoria: prev.categoria || 'Calzado formal',
         descripcion: prev.descripcion || 'Zapatos Oxford de cuero genuino con acabado brillante. Diseño clásico y elegante con puntera refinada. Plantilla acolchada para mayor comodidad. Fabricación artesanal con materiales de primera calidad.',
+        materiales: prev.materiales || 'Cuero genuino, suela de goma, forro interior de piel, plantilla acolchada.',
         tallas: prev.tallas || '39, 40, 41, 42, 43, 44',
         colores: prev.colores || 'Negro, Marrón oscuro',
         tiempoFabricacion: prev.tiempoFabricacion || '10-14 días',
@@ -1306,7 +1316,29 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
             name="descripcion"
             value={productoForm.descripcion}
             onChange={handleProductoChange}
-            placeholder="Características, materiales, instrucciones de cuidado, etc."
+            placeholder="Características, instrucciones de cuidado, etc."
+            style={{
+              width: '100%',
+              padding: '10px',
+              borderRadius: '8px',
+              border: '1px solid #ddd',
+              fontSize: '14px',
+              fontFamily: "'Poppins', sans-serif",
+              minHeight: '80px',
+              resize: 'vertical'
+            }}
+          />
+        </div>
+        
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
+            Materiales
+          </label>
+          <textarea
+            name="materiales"
+            value={productoForm.materiales}
+            onChange={handleProductoChange}
+            placeholder="Cuero, tela, goma, etc."
             style={{
               width: '100%',
               padding: '10px',
