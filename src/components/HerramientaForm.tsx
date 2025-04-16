@@ -29,12 +29,16 @@ interface HerramientaFormProps {
 function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
+  const formImageInputRef = useRef<HTMLInputElement>(null);
   const [loadingAI, setLoadingAI] = useState(false);
   const [showAIOptions, setShowAIOptions] = useState(false);
   const [showTextInput, setShowTextInput] = useState(false);
   const [rawText, setRawText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [processingImageWithOCR, setProcessingImageWithOCR] = useState(false);
+  const [processingPDFWithOCR, setProcessingPDFWithOCR] = useState(false);
+  const [processingText, setProcessingText] = useState(false);
   
   // Estados para el QR
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
@@ -72,129 +76,6 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
   const [extractedText, setExtractedText] = useState<string>('');
   const [showExtractedText, setShowExtractedText] = useState(false);
 
-  const handleHerramientaChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setHerramientaForm(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    
-    // Limpiar error cuando el usuario empieza a escribir
-    if (formErrors[name as keyof HerramientaForm]) {
-      setFormErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
-  };
-
-  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Crear URL para previsualización local
-      const previewUrl = URL.createObjectURL(file);
-      setImagePreview(previewUrl);
-      
-      // Indicar que estamos subiendo la imagen
-      setIsUploadingImage(true);
-      
-      try {
-        // Subir la imagen a Supabase Storage
-        const imageUrl = await uploadImageToSupabase(file);
-        
-        if (imageUrl) {
-          setHerramientaForm(prev => ({
-            ...prev,
-            imagenUrl: imageUrl
-          }));
-        } else {
-          // Si falla, aún podemos usar la URL local para la vista previa
-          console.error('No se pudo subir la imagen a Supabase');
-        }
-      } catch (error) {
-        console.error('Error al subir la imagen:', error);
-      } finally {
-        setIsUploadingImage(false);
-      }
-    }
-  };
-
-  const handlePdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setLoadingAI(true);
-      setShowAIOptions(false);
-      
-      try {
-        // Guardar temporalmente el archivo PDF para procesarlo con Python
-        const tempPath = await saveTemporaryFile(file);
-        
-        if (!tempPath) {
-          throw new Error('No se pudo guardar el archivo temporalmente');
-        }
-        
-        console.log('Enviando PDF para procesamiento OCR:', tempPath);
-        
-        // Llamar al procesamiento OCR usando IPC
-        const result = await window.ipcRenderer.invoke('process-pdf-ocr', tempPath);
-        
-        console.log('Resultado del OCR:', result);
-        
-        if (result) {
-          // Determinar si la respuesta está en camelCase o snake_case
-          const hasCamelCase = result.numeroSerie !== undefined || 
-                               result.fechaAdquisicion !== undefined || 
-                               result.ultimoMantenimiento !== undefined || 
-                               result.proximoMantenimiento !== undefined;
-          
-          const hasSnakeCase = result.numero_serie !== undefined || 
-                               result.fecha_adquisicion !== undefined || 
-                               result.ultimo_mantenimiento !== undefined || 
-                               result.proximo_mantenimiento !== undefined;
-                               
-          // Actualizar el formulario con los datos extraídos, adaptando a los diferentes formatos
-          setHerramientaForm({
-            nombre: result.nombre || '',
-            modelo: result.modelo || '',
-            numeroSerie: hasCamelCase ? result.numeroSerie || '' : (hasSnakeCase ? result.numero_serie || '' : ''),
-            estado: result.estado || '',
-            fechaAdquisicion: hasCamelCase ? result.fechaAdquisicion || '' : (hasSnakeCase ? result.fecha_adquisicion || '' : ''),
-            ultimoMantenimiento: hasCamelCase ? result.ultimoMantenimiento || '' : (hasSnakeCase ? result.ultimo_mantenimiento || '' : ''),
-            proximoMantenimiento: hasCamelCase ? result.proximoMantenimiento || '' : (hasSnakeCase ? result.proximo_mantenimiento || '' : ''),
-            ubicacion: result.ubicacion || '',
-            responsable: result.responsable || '',
-            descripcion: result.descripcion || ''
-          });
-          
-          // Mostrar el texto extraído en su formato original JSON
-          if (typeof result === 'string') {
-            setExtractedText(result);
-          } else {
-            setExtractedText(JSON.stringify(result, null, 2));
-          }
-          
-          setShowExtractedText(true);
-        } else {
-          throw new Error('No se pudieron extraer datos del PDF');
-        }
-      } catch (error: any) {
-        console.error('Error al procesar el PDF:', error);
-        
-        // Crear datos de ejemplo en caso de error
-        const errorData = {
-          error: true,
-          message: `Error al procesar el PDF: ${error.message || 'Error desconocido'}`
-        };
-        
-        // Mostrar información sobre el error
-        setExtractedText(JSON.stringify(errorData, null, 2));
-        setShowExtractedText(true);
-      } finally {
-        setLoadingAI(false);
-      }
-    }
-  };
-
   // Función para guardar temporalmente un archivo y obtener su ruta
   const saveTemporaryFile = async (file: File): Promise<string | null> => {
     return new Promise((resolve, reject) => {
@@ -226,11 +107,187 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
     });
   };
 
+  const handleHerramientaChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setHerramientaForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    
+    // Limpiar error cuando el usuario empieza a escribir
+    if (formErrors[name as keyof HerramientaForm]) {
+      setFormErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Para análisis OCR, NO mostramos la imagen en el formulario
+      // No actualizar setImagePreview
+      
+      // Indicar que estamos procesando la imagen
+      setLoadingAI(true);
+      setProcessingImageWithOCR(true);
+      
+      try {
+        // Guardar temporalmente el archivo para procesarlo con Python OCR
+        const tempPath = await saveTemporaryFile(file);
+        
+        if (!tempPath) {
+          throw new Error('No se pudo guardar la imagen temporalmente');
+        }
+        
+        console.log('Enviando imagen para procesamiento OCR:', tempPath);
+        
+        // Llamar al procesamiento OCR usando IPC - mismo método que para PDFs
+        const result = await window.ipcRenderer.invoke('process-pdf-ocr', tempPath);
+        
+        console.log('Resultado del OCR de imagen:', result);
+        
+        if (result) {
+          // Determinar si la respuesta está en camelCase o snake_case
+          const hasCamelCase = result.numeroSerie !== undefined || 
+                               result.fechaAdquisicion !== undefined || 
+                               result.ultimoMantenimiento !== undefined || 
+                               result.proximoMantenimiento !== undefined;
+          
+          const hasSnakeCase = result.numero_serie !== undefined || 
+                               result.fecha_adquisicion !== undefined || 
+                               result.ultimo_mantenimiento !== undefined || 
+                               result.proximo_mantenimiento !== undefined;
+          
+          // Actualizar el formulario con los datos extraídos, pero preservando los valores existentes
+          setHerramientaForm(prev => ({
+            ...prev,
+            nombre: prev.nombre || result.nombre || '',
+            modelo: prev.modelo || result.modelo || '',
+            numeroSerie: prev.numeroSerie || (hasCamelCase ? result.numeroSerie || '' : (hasSnakeCase ? result.numero_serie || '' : '')),
+            estado: prev.estado || result.estado || '',
+            fechaAdquisicion: prev.fechaAdquisicion || (hasCamelCase ? result.fechaAdquisicion || '' : (hasSnakeCase ? result.fecha_adquisicion || '' : '')),
+            ultimoMantenimiento: prev.ultimoMantenimiento || (hasCamelCase ? result.ultimoMantenimiento || '' : (hasSnakeCase ? result.ultimo_mantenimiento || '' : '')),
+            proximoMantenimiento: prev.proximoMantenimiento || (hasCamelCase ? result.proximoMantenimiento || '' : (hasSnakeCase ? result.proximo_mantenimiento || '' : '')),
+            ubicacion: prev.ubicacion || result.ubicacion || '',
+            responsable: prev.responsable || result.responsable || '',
+            descripcion: prev.descripcion || result.descripcion || ''
+            // No actualizamos imagenUrl aquí
+          }));
+          
+          // Mostrar el texto extraído en su formato original JSON
+          if (typeof result === 'string') {
+            setExtractedText(result);
+          } else {
+            setExtractedText(JSON.stringify(result, null, 2));
+          }
+          
+          setShowExtractedText(true);
+        }
+      } catch (error: any) {
+        console.error('Error al procesar la imagen:', error);
+        
+        // Crear datos de ejemplo en caso de error
+        const errorData = {
+          error: true,
+          message: `Error al procesar la imagen: ${error.message || 'Error desconocido'}`
+        };
+        
+        // Mostrar información sobre el error
+        setExtractedText(JSON.stringify(errorData, null, 2));
+        setShowExtractedText(true);
+      } finally {
+        setLoadingAI(false);
+        setProcessingImageWithOCR(false);
+      }
+    }
+  };
+
+  const handlePdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setLoadingAI(true);
+      setShowAIOptions(false);
+      setProcessingPDFWithOCR(true);
+      
+      try {
+        // Guardar temporalmente el archivo PDF para procesarlo con Python
+        const tempPath = await saveTemporaryFile(file);
+        
+        if (!tempPath) {
+          throw new Error('No se pudo guardar el archivo temporalmente');
+        }
+        
+        console.log('Enviando PDF para procesamiento OCR:', tempPath);
+        
+        // Llamar al procesamiento OCR usando IPC
+        const result = await window.ipcRenderer.invoke('process-pdf-ocr', tempPath);
+        
+        console.log('Resultado del OCR:', result);
+        
+        if (result) {
+          // Determinar si la respuesta está en camelCase o snake_case
+          const hasCamelCase = result.numeroSerie !== undefined || 
+                               result.fechaAdquisicion !== undefined || 
+                               result.ultimoMantenimiento !== undefined || 
+                               result.proximoMantenimiento !== undefined;
+          
+          const hasSnakeCase = result.numero_serie !== undefined || 
+                               result.fecha_adquisicion !== undefined || 
+                               result.ultimo_mantenimiento !== undefined || 
+                               result.proximo_mantenimiento !== undefined;
+          
+          // Actualizar el formulario preservando los valores existentes
+          setHerramientaForm(prev => ({
+            ...prev,
+            nombre: prev.nombre || result.nombre || '',
+            modelo: prev.modelo || result.modelo || '',
+            numeroSerie: prev.numeroSerie || (hasCamelCase ? result.numeroSerie || '' : (hasSnakeCase ? result.numero_serie || '' : '')),
+            estado: prev.estado || result.estado || '',
+            fechaAdquisicion: prev.fechaAdquisicion || (hasCamelCase ? result.fechaAdquisicion || '' : (hasSnakeCase ? result.fecha_adquisicion || '' : '')),
+            ultimoMantenimiento: prev.ultimoMantenimiento || (hasCamelCase ? result.ultimoMantenimiento || '' : (hasSnakeCase ? result.ultimo_mantenimiento || '' : '')),
+            proximoMantenimiento: prev.proximoMantenimiento || (hasCamelCase ? result.proximoMantenimiento || '' : (hasSnakeCase ? result.proximo_mantenimiento || '' : '')),
+            ubicacion: prev.ubicacion || result.ubicacion || '',
+            responsable: prev.responsable || result.responsable || '',
+            descripcion: prev.descripcion || result.descripcion || ''
+          }));
+          
+          // Mostrar el texto extraído en su formato original JSON
+          if (typeof result === 'string') {
+            setExtractedText(result);
+          } else {
+            setExtractedText(JSON.stringify(result, null, 2));
+          }
+          
+          setShowExtractedText(true);
+        } else {
+          throw new Error('No se pudieron extraer datos del PDF');
+        }
+      } catch (error: any) {
+        console.error('Error al procesar el PDF:', error);
+        
+        // Crear datos de ejemplo en caso de error
+        const errorData = {
+          error: true,
+          message: `Error al procesar el PDF: ${error.message || 'Error desconocido'}`
+        };
+        
+        // Mostrar información sobre el error
+        setExtractedText(JSON.stringify(errorData, null, 2));
+        setShowExtractedText(true);
+      } finally {
+        setLoadingAI(false);
+        setProcessingPDFWithOCR(false);
+      }
+    }
+  };
+
   const handleRawTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setRawText(e.target.value);
   };
 
-  const processRawText = () => {
+  const processRawText = async () => {
     if (rawText.trim() === '') {
       return;
     }
@@ -238,26 +295,76 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
     setLoadingAI(true);
     setShowTextInput(false);
     setShowAIOptions(false);
+    setProcessingText(true);
     
-    // Simulación de procesamiento - aquí la IA analizaría el texto
-    setTimeout(() => {
-      // Ejemplo de extracción de información del texto
-      setHerramientaForm({
-        nombre: 'Sierra Circular Profesional',
-        modelo: 'SC-1500',
-        numeroSerie: 'SCP-2023-789',
-        estado: 'Bueno',
-        fechaAdquisicion: new Date(Date.now() - 180*24*60*60*1000).toISOString().split('T')[0],
-        ultimoMantenimiento: new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0],
-        proximoMantenimiento: new Date(Date.now() + 60*24*60*60*1000).toISOString().split('T')[0],
-        ubicacion: 'Taller de corte, estante 2',
-        responsable: 'Ana Martínez',
-        descripcion: 'Sierra circular profesional con disco de 7 pulgadas. Potencia de 1500W. Incluye guía de corte y protector de seguridad. Velocidad ajustable.',
-      });
+    try {
+      console.log('Enviando texto para análisis con IA:', rawText);
       
+      // Guardar temporalmente el texto en un archivo para procesarlo
+      const textContent = rawText;
+      
+      // Llamar al servicio de OCR para procesar el texto directamente
+      // En este caso, no hay OCR real ya que el texto ya está digitalizado
+      // Pero usamos el mismo servicio para aprovechar el análisis del agente
+      const result = await window.ipcRenderer.invoke('process-text-with-ai', textContent);
+      
+      console.log('Resultado del análisis de texto:', result);
+      
+      if (result) {
+        // Determinar si la respuesta está en camelCase o snake_case
+        const hasCamelCase = result.numeroSerie !== undefined || 
+                             result.fechaAdquisicion !== undefined || 
+                             result.ultimoMantenimiento !== undefined || 
+                             result.proximoMantenimiento !== undefined;
+        
+        const hasSnakeCase = result.numero_serie !== undefined || 
+                             result.fecha_adquisicion !== undefined || 
+                             result.ultimo_mantenimiento !== undefined || 
+                             result.proximo_mantenimiento !== undefined;
+        
+        // Actualizar el formulario con los datos extraídos preservando los valores existentes
+        setHerramientaForm(prev => ({
+          ...prev,
+          nombre: prev.nombre || result.nombre || '',
+          modelo: prev.modelo || result.modelo || '',
+          numeroSerie: prev.numeroSerie || (hasCamelCase ? result.numeroSerie || '' : (hasSnakeCase ? result.numero_serie || '' : '')),
+          estado: prev.estado || result.estado || '',
+          fechaAdquisicion: prev.fechaAdquisicion || (hasCamelCase ? result.fechaAdquisicion || '' : (hasSnakeCase ? result.fecha_adquisicion || '' : '')),
+          ultimoMantenimiento: prev.ultimoMantenimiento || (hasCamelCase ? result.ultimoMantenimiento || '' : (hasSnakeCase ? result.ultimo_mantenimiento || '' : '')),
+          proximoMantenimiento: prev.proximoMantenimiento || (hasCamelCase ? result.proximoMantenimiento || '' : (hasSnakeCase ? result.proximo_mantenimiento || '' : '')),
+          ubicacion: prev.ubicacion || result.ubicacion || '',
+          responsable: prev.responsable || result.responsable || '',
+          descripcion: prev.descripcion || result.descripcion || ''
+        }));
+        
+        // Mostrar el texto extraído en su formato original JSON
+        if (typeof result === 'string') {
+          setExtractedText(result);
+        } else {
+          setExtractedText(JSON.stringify(result, null, 2));
+        }
+        
+        setShowExtractedText(true);
+      } else {
+        throw new Error('No se pudieron extraer datos del texto');
+      }
+    } catch (error: any) {
+      console.error('Error al procesar el texto:', error);
+      
+      // Crear datos de ejemplo en caso de error
+      const errorData = {
+        error: true,
+        message: `Error al procesar el texto: ${error.message || 'Error desconocido'}`
+      };
+      
+      // Mostrar información sobre el error
+      setExtractedText(JSON.stringify(errorData, null, 2));
+      setShowExtractedText(true);
+    } finally {
       setRawText('');
       setLoadingAI(false);
-    }, 2000);
+      setProcessingText(false);
+    }
   };
 
   const openTextInput = () => {
@@ -275,6 +382,10 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
 
   const triggerPdfInput = () => {
     pdfInputRef.current?.click();
+  };
+
+  const triggerFormImageInput = () => {
+    formImageInputRef.current?.click();
   };
 
   const validateForm = (): boolean => {
@@ -354,6 +465,7 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
   // Simular completado con IA desde una foto
   const completeWithAIFromImage = () => {
     setShowAIOptions(false);
+    // Usar triggerFileInput para la imagen de OCR
     triggerFileInput();
   };
 
@@ -370,18 +482,19 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
     
     // Simulación de carga - en producción, aquí iría una llamada a la API de IA
     setTimeout(() => {
-      setHerramientaForm({
-        nombre: 'Máquina de Coser Industrial',
-        modelo: 'MSI-5000',
-        numeroSerie: 'MCI-2023-123',
-        estado: 'Nuevo',
-        fechaAdquisicion: new Date().toISOString().split('T')[0],
-        ultimoMantenimiento: new Date().toISOString().split('T')[0],
-        proximoMantenimiento: new Date(Date.now() + 180*24*60*60*1000).toISOString().split('T')[0],
-        ubicacion: 'Área de producción, sección 3',
-        responsable: 'María López',
-        descripcion: 'Máquina de coser industrial de alta velocidad. Ideal para trabajos con cuero y materiales gruesos. Incluye 10 tipos de puntadas diferentes y sistema de lubricación automática.',
-      });
+      setHerramientaForm(prev => ({
+        ...prev,
+        nombre: prev.nombre || 'Máquina de Coser Industrial',
+        modelo: prev.modelo || 'MSI-5000',
+        numeroSerie: prev.numeroSerie || 'MCI-2023-123',
+        estado: prev.estado || 'Nuevo',
+        fechaAdquisicion: prev.fechaAdquisicion || new Date().toISOString().split('T')[0],
+        ultimoMantenimiento: prev.ultimoMantenimiento || new Date().toISOString().split('T')[0],
+        proximoMantenimiento: prev.proximoMantenimiento || new Date(Date.now() + 180*24*60*60*1000).toISOString().split('T')[0],
+        ubicacion: prev.ubicacion || 'Área de producción, sección 3',
+        responsable: prev.responsable || 'María López',
+        descripcion: prev.descripcion || 'Máquina de coser industrial de alta velocidad. Ideal para trabajos con cuero y materiales gruesos. Incluye 10 tipos de puntadas diferentes y sistema de lubricación automática.'
+      }));
       
       setLoadingAI(false);
     }, 1500);
@@ -453,6 +566,38 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
     }
   };
 
+  // Función para subir una imagen para el formulario (no para OCR)
+  const handleFormImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Crear URL para previsualización local
+      const previewUrl = URL.createObjectURL(file);
+      setImagePreview(previewUrl);
+      
+      // Indicar que estamos subiendo la imagen
+      setIsUploadingImage(true);
+      
+      try {
+        // Subir la imagen a Supabase Storage
+        const imageUrl = await uploadImageToSupabase(file);
+        
+        if (imageUrl) {
+          setHerramientaForm(prev => ({
+            ...prev,
+            imagenUrl: imageUrl
+          }));
+        } else {
+          // Si falla, aún podemos usar la URL local para la vista previa
+          console.error('No se pudo subir la imagen a Supabase');
+        }
+      } catch (error) {
+        console.error('Error al subir la imagen:', error);
+      } finally {
+        setIsUploadingImage(false);
+      }
+    }
+  };
+
   return (
     <div 
       style={{
@@ -518,6 +663,78 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
             {loadingAI ? 'Generando...' : 'Completar con IA'}
           </button>
           
+          {/* Mensaje de procesamiento de imagen */}
+          {processingImageWithOCR && (
+            <div style={{ 
+              position: 'absolute', 
+              top: '44px', 
+              right: 0,
+              backgroundColor: '#F0F9FF',
+              border: '1px solid #BAE6FD',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              width: '240px',
+              zIndex: 15,
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                <PhotoIcon style={{ width: '16px', height: '16px', marginRight: '8px', color: '#16A34A' }} />
+                <span style={{ fontWeight: 600, fontSize: '14px', color: '#16A34A' }}>Analizando imagen</span>
+              </div>
+              <p style={{ margin: 0, fontSize: '13px', color: '#166534' }}>
+                Extrayendo texto con OCR y procesando con IA para completar el formulario...
+              </p>
+            </div>
+          )}
+          
+          {/* Mensaje de procesamiento de PDF */}
+          {processingPDFWithOCR && (
+            <div style={{ 
+              position: 'absolute', 
+              top: '44px', 
+              right: 0,
+              backgroundColor: '#F0F9FF',
+              border: '1px solid #BAE6FD',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              width: '240px',
+              zIndex: 15,
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                <DocumentIcon style={{ width: '16px', height: '16px', marginRight: '8px', color: '#DC2626' }} />
+                <span style={{ fontWeight: 600, fontSize: '14px', color: '#DC2626' }}>Analizando PDF</span>
+              </div>
+              <p style={{ margin: 0, fontSize: '13px', color: '#7F1D1D' }}>
+                Extrayendo texto del documento y procesando con IA para completar el formulario...
+              </p>
+            </div>
+          )}
+          
+          {/* Mensaje de procesamiento de texto */}
+          {processingText && (
+            <div style={{ 
+              position: 'absolute', 
+              top: '44px', 
+              right: 0,
+              backgroundColor: '#F0F9FF',
+              border: '1px solid #BAE6FD',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              width: '240px',
+              zIndex: 15,
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                <ChatBubbleBottomCenterTextIcon style={{ width: '16px', height: '16px', marginRight: '8px', color: '#0EA5E9' }} />
+                <span style={{ fontWeight: 600, fontSize: '14px', color: '#0EA5E9' }}>Analizando texto</span>
+              </div>
+              <p style={{ margin: 0, fontSize: '13px', color: '#0C4A6E' }}>
+                Procesando descripción textual con IA para completar el formulario...
+              </p>
+            </div>
+          )}
+          
           {/* Menú de opciones de IA */}
           {showAIOptions && (
             <div 
@@ -565,7 +782,7 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
                 <PhotoIcon style={{ width: '16px', height: '16px', marginRight: '10px', color: '#16A34A' }} />
                 <div>
                   <div style={{ fontSize: '14px', color: '#333', fontFamily: "'Poppins', sans-serif" }}>Subir foto</div>
-                  <div style={{ fontSize: '12px', color: '#666', fontFamily: "'Poppins', sans-serif" }}>Extraer datos de imagen</div>
+                  <div style={{ fontSize: '12px', color: '#666', fontFamily: "'Poppins', sans-serif" }}>Extraer datos de imagen mediante OCR</div>
                 </div>
               </button>
               
@@ -589,7 +806,7 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
                 <DocumentIcon style={{ width: '16px', height: '16px', marginRight: '10px', color: '#DC2626' }} />
                 <div>
                   <div style={{ fontSize: '14px', color: '#333', fontFamily: "'Poppins', sans-serif" }}>Subir PDF</div>
-                  <div style={{ fontSize: '12px', color: '#666', fontFamily: "'Poppins', sans-serif" }}>Extraer datos de documento</div>
+                  <div style={{ fontSize: '12px', color: '#666', fontFamily: "'Poppins', sans-serif" }}>Extraer datos de documento mediante OCR</div>
                 </div>
               </button>
               
@@ -810,9 +1027,16 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
                 onChange={handleImageChange}
                 accept="image/*"
               />
+              <input
+                type="file"
+                ref={formImageInputRef}
+                style={{ display: 'none' }}
+                onChange={handleFormImageChange}
+                accept="image/*"
+              />
               <button 
                 type="button"
-                onClick={triggerFileInput}
+                onClick={triggerFormImageInput}
                 disabled={isUploadingImage}
                 style={{
                   backgroundColor: 'white',
@@ -825,13 +1049,32 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
                   transition: 'all 0.2s ease',
                   fontFamily: "'Poppins', sans-serif",
                   opacity: isUploadingImage ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
                 }}
                 onMouseEnter={(e) => !isUploadingImage && (e.currentTarget.style.transform = 'translateY(-2px)')}
                 onMouseLeave={(e) => !isUploadingImage && (e.currentTarget.style.transform = 'translateY(0)')}
               >
-                {isUploadingImage ? 'Subiendo...' : 'Agregar foto'}
+                {isUploadingImage ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Subiendo...
+                  </>
+                ) : (
+                  'Agregar foto'
+                )}
               </button>
-              <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#666', fontFamily: "'Poppins', sans-serif" }}>
+              <p style={{ 
+                margin: '8px 0 0', 
+                fontSize: '12px', 
+                color: '#666', 
+                fontFamily: "'Poppins', sans-serif",
+                fontStyle: 'italic'
+              }}>
                 Formatos: JPG, PNG. Máx 5MB
               </p>
             </div>

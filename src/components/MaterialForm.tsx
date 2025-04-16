@@ -4,6 +4,7 @@ import { useInventario } from '../lib/hooks';
 import { uploadImageToSupabase, generateQRCode } from '../lib/hooks';
 import QRCodeModal from './QRCodeModal';
 import { supabase } from '../lib/supabase';
+import React from 'react';
 
 // Estilo global para aplicar Poppins a todo el componente
 const globalStyles = {
@@ -35,18 +36,27 @@ interface MaterialFormProps {
 function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
+  const formImageInputRef = useRef<HTMLInputElement>(null);
   const [loadingAI, setLoadingAI] = useState(false);
   const [showAIOptions, setShowAIOptions] = useState(false);
   const [showTextInput, setShowTextInput] = useState(false);
   const [rawText, setRawText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [processingImageWithOCR, setProcessingImageWithOCR] = useState(false);
+  const [processingPDFWithOCR, setProcessingPDFWithOCR] = useState(false);
+  const [processingText, setProcessingText] = useState(false);
   
   // Estados para el QR
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [showQrModal, setShowQrModal] = useState(false);
   const [isQrModalClosing, setIsQrModalClosing] = useState(false);
   const [savedItemId, setSavedItemId] = useState<string>('');
+  
+  // Estado para el texto extraído del PDF/imagen
+  const [extractedText, setExtractedText] = useState<string>('');
+  const [showExtractedText, setShowExtractedText] = useState(false);
+  const [isExtractedTextClosing, setIsExtractedTextClosing] = useState(false);
   
   // Usamos el hook personalizado para inventario
   const { addInventarioItem } = useInventario();
@@ -93,6 +103,179 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Para análisis OCR, NO mostramos la imagen en el formulario
+      // No actualizar setImagePreview
+      
+      // Indicar que estamos procesando la imagen
+      setLoadingAI(true);
+      setProcessingImageWithOCR(true);
+      
+      try {
+        // Guardar temporalmente el archivo para procesarlo con Python OCR
+        const tempPath = await saveTemporaryFile(file);
+        
+        if (!tempPath) {
+          throw new Error('No se pudo guardar la imagen temporalmente');
+        }
+        
+        console.log('Enviando imagen para procesamiento OCR:', tempPath);
+        
+        // Llamar al procesamiento OCR usando IPC
+        const result = await window.ipcRenderer.invoke('process-material-ocr', tempPath);
+        
+        console.log('Resultado del OCR de imagen:', result);
+        
+        if (result) {
+          // Actualizar el formulario con los datos extraídos preservando valores existentes
+          setMaterialForm(prev => ({
+            ...prev,
+            nombre: prev.nombre || result.nombre || '',
+            referencia: prev.referencia || result.referencia || '',
+            unidades: prev.unidades || result.unidades || '',
+            stock: prev.stock || result.stock || '',
+            stockMinimo: prev.stockMinimo || result.stockMinimo || '',
+            precio: prev.precio || result.precio || '',
+            categoria: prev.categoria || result.categoria || '',
+            proveedor: prev.proveedor || result.proveedor || '',
+            descripcion: prev.descripcion || result.descripcion || '',
+            fechaAdquisicion: prev.fechaAdquisicion || result.fechaAdquisicion || '',
+            ubicacion: prev.ubicacion || result.ubicacion || ''
+            // No actualizamos imagenUrl aquí
+          }));
+          
+          // Mostrar el texto extraído en su formato original JSON
+          if (typeof result === 'string') {
+            setExtractedText(result);
+          } else {
+            setExtractedText(JSON.stringify(result, null, 2));
+          }
+          
+          setShowExtractedText(true);
+        }
+      } catch (error: any) {
+        console.error('Error al procesar la imagen:', error);
+        
+        // Mensaje de error más detallado
+        let errorMessage = error.message || 'Error desconocido';
+        
+        // Verificar si es un error específico de la ruta o codificación
+        if (errorMessage.includes('unicodeescape') || errorMessage.includes('path')) {
+          errorMessage = 'Error en la codificación de caracteres. Por favor contacte al soporte técnico.';
+        } else if (errorMessage.includes('OCR') || errorMessage.includes('tesseract')) {
+          errorMessage = 'Error en el procesamiento OCR. Verifique que la imagen tenga buena calidad.';
+        }
+        
+        // Crear datos para mostrar el error
+        const errorData = {
+          error: true,
+          nombre: "Error de procesamiento",
+          descripcion: "No se pudo analizar la imagen",
+          message: `Error: ${errorMessage}`
+        };
+        
+        // Mostrar información sobre el error
+        setExtractedText(JSON.stringify(errorData, null, 2));
+        setShowExtractedText(true);
+        
+        // Mostrar mensaje de error en la consola para diagnóstico
+        console.error('Error detallado:', error);
+      } finally {
+        setLoadingAI(false);
+        setProcessingImageWithOCR(false);
+      }
+    }
+  };
+
+  const handlePdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setLoadingAI(true);
+      setShowAIOptions(false);
+      setProcessingPDFWithOCR(true);
+      
+      try {
+        // Guardar temporalmente el archivo PDF para procesarlo con Python
+        const tempPath = await saveTemporaryFile(file);
+        
+        if (!tempPath) {
+          throw new Error('No se pudo guardar el archivo temporalmente');
+        }
+        
+        console.log('Enviando PDF para procesamiento OCR:', tempPath);
+        
+        // Llamar al procesamiento OCR usando IPC
+        const result = await window.ipcRenderer.invoke('process-material-ocr', tempPath);
+        
+        console.log('Resultado del OCR:', result);
+        
+        if (result) {
+          // Actualizar el formulario con los datos extraídos preservando valores existentes
+          setMaterialForm(prev => ({
+            ...prev,
+            nombre: prev.nombre || result.nombre || '',
+            referencia: prev.referencia || result.referencia || '',
+            unidades: prev.unidades || result.unidades || '',
+            stock: prev.stock || result.stock || '',
+            stockMinimo: prev.stockMinimo || result.stockMinimo || '',
+            precio: prev.precio || result.precio || '',
+            categoria: prev.categoria || result.categoria || '',
+            proveedor: prev.proveedor || result.proveedor || '',
+            descripcion: prev.descripcion || result.descripcion || '',
+            fechaAdquisicion: prev.fechaAdquisicion || result.fechaAdquisicion || '',
+            ubicacion: prev.ubicacion || result.ubicacion || ''
+          }));
+          
+          // Mostrar el texto extraído en su formato original JSON
+          if (typeof result === 'string') {
+            setExtractedText(result);
+          } else {
+            setExtractedText(JSON.stringify(result, null, 2));
+          }
+          
+          setShowExtractedText(true);
+        } else {
+          throw new Error('No se pudieron extraer datos del PDF');
+        }
+      } catch (error: any) {
+        console.error('Error al procesar el PDF:', error);
+        
+        // Mensaje de error más detallado
+        let errorMessage = error.message || 'Error desconocido';
+        
+        // Verificar si es un error específico de la ruta o codificación
+        if (errorMessage.includes('unicodeescape') || errorMessage.includes('path')) {
+          errorMessage = 'Error en la codificación de caracteres. Por favor contacte al soporte técnico.';
+        } else if (errorMessage.includes('PDF') || errorMessage.includes('PyMuPDF')) {
+          errorMessage = 'Error en el procesamiento del PDF. El archivo podría estar dañado o protegido.';
+        } else if (errorMessage.includes('OCR') || errorMessage.includes('tesseract')) {
+          errorMessage = 'Error en el procesamiento OCR. Verifique que el PDF contenga texto legible.';
+        }
+        
+        // Crear datos para mostrar el error
+        const errorData = {
+          error: true,
+          nombre: "Error de procesamiento",
+          descripcion: "No se pudo analizar el PDF",
+          message: `Error: ${errorMessage}`
+        };
+        
+        // Mostrar información sobre el error
+        setExtractedText(JSON.stringify(errorData, null, 2));
+        setShowExtractedText(true);
+        
+        // Mostrar mensaje de error en la consola para diagnóstico
+        console.error('Error detallado:', error);
+      } finally {
+        setLoadingAI(false);
+        setProcessingPDFWithOCR(false);
+      }
+    }
+  };
+
+  // Función para subir una imagen para el formulario (no para OCR)
+  const handleFormImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
       // Crear URL para previsualización local
       const previewUrl = URL.createObjectURL(file);
       setImagePreview(previewUrl);
@@ -121,39 +304,42 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
     }
   };
 
-  const handlePdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setLoadingAI(true);
-      setShowAIOptions(false);
-      
-      // Simulación de carga - en producción, aquí iría una llamada a la API de IA
-      // que procesaría el PDF y extraería la información
-      setTimeout(() => {
-        setMaterialForm({
-          nombre: 'Piel Sintética Ecológica',
-          referencia: 'PSE-2023-789',
-          unidades: 'metros cuadrados',
-          stock: '85',
-          stockMinimo: '20',
-          precio: '32.75',
-          categoria: 'Textil',
-          proveedor: 'EcoMateriales S.L.',
-          descripcion: 'Material sintético de alta calidad con apariencia de cuero. Impermeable y resistente a manchas. Ideal para calzado casual y bolsos. Disponible en varios colores.',
-          fechaAdquisicion: new Date().toISOString().split('T')[0],
-          ubicacion: 'Almacén B, Estante 2',
-        });
-        
-        setLoadingAI(false);
-      }, 2000);
-    }
+  // Función para guardar temporalmente un archivo y obtener su ruta
+  const saveTemporaryFile = async (file: File): Promise<string | null> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          // Generar un nombre único para el archivo temporal
+          const tempFileName = `temp_${Date.now()}_${file.name}`;
+          
+          // Solicitar al proceso principal que guarde el archivo
+          const tempPath = await window.ipcRenderer.invoke(
+            'save-temp-file', 
+            {
+              fileName: tempFileName,
+              data: event.target?.result
+            }
+          );
+          
+          resolve(tempPath);
+        } catch (error) {
+          console.error('Error al guardar archivo temporal:', error);
+          reject(error);
+        }
+      };
+      reader.onerror = () => {
+        reject(new Error('No se pudo leer el archivo'));
+      };
+      reader.readAsArrayBuffer(file);
+    });
   };
 
   const handleRawTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setRawText(e.target.value);
   };
 
-  const processRawText = () => {
+  const processRawText = async () => {
     if (rawText.trim() === '') {
       return;
     }
@@ -161,27 +347,74 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
     setLoadingAI(true);
     setShowTextInput(false);
     setShowAIOptions(false);
+    setProcessingText(true);
     
-    // Simulación de procesamiento - aquí la IA analizaría el texto
-    setTimeout(() => {
-      // Ejemplo de extracción de información del texto
-      setMaterialForm({
-        nombre: 'Corcho Natural Premium',
-        referencia: 'CNP-2023-789',
-        unidades: 'láminas',
-        stock: '50',
-        stockMinimo: '15',
-        precio: '28.99',
-        categoria: 'Otros',
-        proveedor: 'Corcheras Ibéricas S.L.',
-        descripcion: 'Material de corcho natural para plantillas. Proporiona amortiguación y es antibacteriano. Espesor de 3mm. Ideal para plantillas de calzado de alta gama.',
-        fechaAdquisicion: new Date().toISOString().split('T')[0],
-        ubicacion: 'Almacén C, Estante 2',
-      });
+    try {
+      console.log('Enviando texto para análisis con IA:', rawText);
       
+      // Llamar al servicio de IA para procesar el texto directamente
+      const result = await window.ipcRenderer.invoke('process-material-text', rawText);
+      
+      console.log('Resultado del análisis de texto:', result);
+      
+      if (result) {
+        // Actualizar el formulario con los datos extraídos preservando valores existentes
+        setMaterialForm(prev => ({
+          ...prev,
+          nombre: prev.nombre || result.nombre || '',
+          referencia: prev.referencia || result.referencia || '',
+          unidades: prev.unidades || result.unidades || '',
+          stock: prev.stock || result.stock || '',
+          stockMinimo: prev.stockMinimo || result.stockMinimo || '',
+          precio: prev.precio || result.precio || '',
+          categoria: prev.categoria || result.categoria || '',
+          proveedor: prev.proveedor || result.proveedor || '',
+          descripcion: prev.descripcion || result.descripcion || '',
+          fechaAdquisicion: prev.fechaAdquisicion || result.fechaAdquisicion || '',
+          ubicacion: prev.ubicacion || result.ubicacion || ''
+        }));
+        
+        // Mostrar el texto extraído en su formato original JSON
+        if (typeof result === 'string') {
+          setExtractedText(result);
+        } else {
+          setExtractedText(JSON.stringify(result, null, 2));
+        }
+        
+        setShowExtractedText(true);
+      } else {
+        throw new Error('No se pudieron extraer datos del texto');
+      }
+    } catch (error: any) {
+      console.error('Error al procesar el texto:', error);
+      
+      // Mensaje de error más detallado
+      let errorMessage = error.message || 'Error desconocido';
+      
+      // Verificar si es un error específico de la ruta o codificación
+      if (errorMessage.includes('unicodeescape') || errorMessage.includes('path')) {
+        errorMessage = 'Error en la codificación de caracteres. Por favor contacte al soporte técnico.';
+      }
+      
+      // Crear datos para mostrar el error
+      const errorData = {
+        error: true,
+        nombre: "Error de procesamiento",
+        descripcion: "No se pudo analizar el texto con IA",
+        message: `Error: ${errorMessage}`
+      };
+      
+      // Mostrar información sobre el error
+      setExtractedText(JSON.stringify(errorData, null, 2));
+      setShowExtractedText(true);
+      
+      // Mostrar mensaje de error en la consola para diagnóstico
+      console.error('Error detallado:', error);
+    } finally {
       setRawText('');
       setLoadingAI(false);
-    }, 2000);
+      setProcessingText(false);
+    }
   };
 
   const openTextInput = () => {
@@ -199,6 +432,10 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
 
   const triggerPdfInput = () => {
     pdfInputRef.current?.click();
+  };
+
+  const triggerFormImageInput = () => {
+    formImageInputRef.current?.click();
   };
 
   const validateForm = (): boolean => {
@@ -314,19 +551,20 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
     
     // Simulación de carga - en producción, aquí iría una llamada a la API de IA
     setTimeout(() => {
-      setMaterialForm({
-        nombre: 'Cuero Vacuno Premium',
-        referencia: 'CV-2023-456',
-        unidades: 'metros cuadrados',
-        stock: '120',
-        stockMinimo: '30',
-        precio: '45.50',
-        categoria: 'Cuero',
-        proveedor: 'Curtidos Superiores S.A.',
-        descripcion: 'Cuero vacuno de alta calidad, curtido al vegetal. Ideal para la fabricación de calzado de gama alta. Resistente al desgaste y con un acabado premium. Grosor de 2mm. Color marrón oscuro.',
-        fechaAdquisicion: new Date().toISOString().split('T')[0],
-        ubicacion: 'Almacén A, Estante 3',
-      });
+      setMaterialForm(prev => ({
+        ...prev,
+        nombre: prev.nombre || 'Cuero Vacuno Premium',
+        referencia: prev.referencia || 'CV-2023-456',
+        unidades: prev.unidades || 'metros cuadrados',
+        stock: prev.stock || '120',
+        stockMinimo: prev.stockMinimo || '30',
+        precio: prev.precio || '45.50',
+        categoria: prev.categoria || 'Cuero',
+        proveedor: prev.proveedor || 'Curtidos Superiores S.A.',
+        descripcion: prev.descripcion || 'Cuero vacuno de alta calidad, curtido al vegetal. Ideal para la fabricación de calzado de gama alta. Resistente al desgaste y con un acabado premium. Grosor de 2mm. Color marrón oscuro.',
+        fechaAdquisicion: prev.fechaAdquisicion || new Date().toISOString().split('T')[0],
+        ubicacion: prev.ubicacion || 'Almacén A, Estante 3'
+      }));
       
       setLoadingAI(false);
     }, 1500);
@@ -344,6 +582,103 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
     'Plantilla',
     'Otros'
   ];
+
+  // Función para cerrar el modal de texto extraído
+  const closeExtractedTextModal = () => {
+    setIsExtractedTextClosing(true);
+    setTimeout(() => {
+      setShowExtractedText(false);
+      setIsExtractedTextClosing(false);
+    }, 300);
+  };
+
+  // Función para formatear los datos extraídos para mostrarlos
+  const formatExtractedDataForDisplay = (jsonText: string) => {
+    try {
+      let data;
+      if (typeof jsonText === 'string') {
+        data = JSON.parse(jsonText);
+      } else {
+        data = jsonText;
+      }
+      
+      // Crear un objeto con las etiquetas en español
+      const labels: Record<string, string> = {
+        nombre: 'Nombre',
+        referencia: 'Referencia',
+        unidades: 'Unidades',
+        stock: 'Stock',
+        stockMinimo: 'Stock Mínimo',
+        precio: 'Precio',
+        categoria: 'Categoría',
+        proveedor: 'Proveedor',
+        descripcion: 'Descripción',
+        fechaAdquisicion: 'Fecha de Adquisición',
+        ubicacion: 'Ubicación'
+      };
+      
+      // Crear el HTML para mostrar los datos
+      return (
+        <div>
+          <h3 style={{
+            fontSize: '16px',
+            fontWeight: 600,
+            marginBottom: '16px',
+            fontFamily: "'Poppins', sans-serif"
+          }}>
+            Datos extraídos:
+          </h3>
+          
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 2fr',
+            gap: '8px',
+            fontSize: '14px',
+            fontFamily: "'Poppins', sans-serif"
+          }}>
+            {Object.entries(data).map(([key, value]) => {
+              if (key !== 'error' && key !== 'message' && labels[key]) {
+                return (
+                  <React.Fragment key={key}>
+                    <div style={{ 
+                      fontWeight: 500, 
+                      color: '#555',
+                      padding: '4px 0'
+                    }}>
+                      {labels[key] || key}:
+                    </div>
+                    <div style={{ 
+                      color: '#333',
+                      padding: '4px 0'
+                    }}>
+                      {value as string || '-'}
+                    </div>
+                  </React.Fragment>
+                );
+              }
+              return null;
+            })}
+          </div>
+          
+          {data.error && (
+            <div style={{
+              backgroundColor: 'rgba(220, 38, 38, 0.1)',
+              color: '#DC2626',
+              padding: '12px',
+              borderRadius: '8px',
+              marginTop: '16px',
+              fontSize: '14px'
+            }}>
+              <strong>Error:</strong> {data.message}
+            </div>
+          )}
+        </div>
+      );
+    } catch (error) {
+      console.error('Error al formatear datos:', error);
+      return <div>Error al procesar datos</div>;
+    }
+  };
 
   return (
     <div 
@@ -409,6 +744,78 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
             <SparklesIcon style={{ width: '16px', height: '16px', marginRight: '6px', color: '#4F46E5' }} />
             {loadingAI ? 'Generando...' : 'Completar con IA'}
           </button>
+          
+          {/* Mensaje de procesamiento de imagen */}
+          {processingImageWithOCR && (
+            <div style={{ 
+              position: 'absolute', 
+              top: '44px', 
+              right: 0,
+              backgroundColor: '#F0F9FF',
+              border: '1px solid #BAE6FD',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              width: '240px',
+              zIndex: 15,
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                <PhotoIcon style={{ width: '16px', height: '16px', marginRight: '8px', color: '#16A34A' }} />
+                <span style={{ fontWeight: 600, fontSize: '14px', color: '#16A34A' }}>Analizando imagen</span>
+              </div>
+              <p style={{ margin: 0, fontSize: '13px', color: '#166534' }}>
+                Extrayendo texto con OCR y procesando con IA para completar el formulario...
+              </p>
+            </div>
+          )}
+          
+          {/* Mensaje de procesamiento de PDF */}
+          {processingPDFWithOCR && (
+            <div style={{ 
+              position: 'absolute', 
+              top: '44px', 
+              right: 0,
+              backgroundColor: '#F0F9FF',
+              border: '1px solid #BAE6FD',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              width: '240px',
+              zIndex: 15,
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                <DocumentIcon style={{ width: '16px', height: '16px', marginRight: '8px', color: '#DC2626' }} />
+                <span style={{ fontWeight: 600, fontSize: '14px', color: '#DC2626' }}>Analizando PDF</span>
+              </div>
+              <p style={{ margin: 0, fontSize: '13px', color: '#7F1D1D' }}>
+                Extrayendo texto del documento y procesando con IA para completar el formulario...
+              </p>
+            </div>
+          )}
+          
+          {/* Mensaje de procesamiento de texto */}
+          {processingText && (
+            <div style={{ 
+              position: 'absolute', 
+              top: '44px', 
+              right: 0,
+              backgroundColor: '#F0F9FF',
+              border: '1px solid #BAE6FD',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              width: '240px',
+              zIndex: 15,
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                <ChatBubbleBottomCenterTextIcon style={{ width: '16px', height: '16px', marginRight: '8px', color: '#0EA5E9' }} />
+                <span style={{ fontWeight: 600, fontSize: '14px', color: '#0EA5E9' }}>Analizando texto</span>
+              </div>
+              <p style={{ margin: 0, fontSize: '13px', color: '#0C4A6E' }}>
+                Procesando descripción textual con IA para completar el formulario...
+              </p>
+            </div>
+          )}
           
           {/* Menú de opciones de IA */}
           {showAIOptions && (
@@ -702,9 +1109,16 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
                 onChange={handleImageChange}
                 accept="image/*"
               />
+              <input
+                type="file"
+                ref={formImageInputRef}
+                style={{ display: 'none' }}
+                onChange={handleFormImageChange}
+                accept="image/*"
+              />
               <button 
                 type="button"
-                onClick={triggerFileInput}
+                onClick={triggerFormImageInput}
                 disabled={isUploadingImage}
                 style={{
                   backgroundColor: 'white',
@@ -717,13 +1131,32 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
                   transition: 'all 0.2s ease',
                   fontFamily: "'Poppins', sans-serif",
                   opacity: isUploadingImage ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
                 }}
                 onMouseEnter={(e) => !isUploadingImage && (e.currentTarget.style.transform = 'translateY(-2px)')}
                 onMouseLeave={(e) => !isUploadingImage && (e.currentTarget.style.transform = 'translateY(0)')}
               >
-                {isUploadingImage ? 'Subiendo...' : 'Agregar foto'}
+                {isUploadingImage ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Subiendo...
+                  </>
+                ) : (
+                  'Agregar foto'
+                )}
               </button>
-              <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#666', fontFamily: "'Poppins', sans-serif" }}>
+              <p style={{ 
+                margin: '8px 0 0', 
+                fontSize: '12px', 
+                color: '#666', 
+                fontFamily: "'Poppins', sans-serif",
+                fontStyle: 'italic'
+              }}>
                 Formatos: JPG, PNG. Máx 5MB
               </p>
             </div>
@@ -1020,6 +1453,104 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
           onClose={handleCloseQrModal}
           isClosing={isQrModalClosing}
         />
+      )}
+      
+      {/* Modal para mostrar el texto extraído del PDF/imagen */}
+      {showExtractedText && (
+        <div 
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'white',
+            zIndex: 30,
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '24px',
+            borderRadius: '8px',
+            opacity: isExtractedTextClosing ? 0 : 1,
+            transform: isExtractedTextClosing ? 'scale(0.95)' : 'scale(1)',
+            transition: 'all 0.3s ease-in-out',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+            <button
+              onClick={closeExtractedTextModal}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                marginRight: '12px',
+                borderRadius: '8px',
+                padding: '4px',
+              }}
+            >
+              <ArrowLeftIcon style={{ width: '20px', height: '20px', color: '#666' }} />
+            </button>
+            <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>
+              Datos extraídos del documento
+            </h2>
+          </div>
+          
+          <div 
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              border: '2px solid #4F46E5',
+              borderRadius: '8px',
+              padding: '16px',
+              backgroundColor: '#f9f9f9',
+              fontSize: '14px',
+              fontFamily: 'monospace',
+              whiteSpace: 'pre-wrap',
+              marginBottom: '20px',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+            }}
+            className="apple-scrollbar"
+          >
+            {extractedText || 'No se pudo extraer texto del documento.'}
+          </div>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px' }}>
+            <div>
+              <p style={{ 
+                fontSize: '14px', 
+                color: '#16A34A', 
+                fontFamily: "'Poppins', sans-serif", 
+                margin: '0 0 8px 0' 
+              }}>
+                Los datos extraídos han sido aplicados al formulario
+              </p>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={closeExtractedTextModal}
+                style={{
+                  backgroundColor: 'white',
+                  color: '#666',
+                  border: '1px solid #e0e0e0',
+                  padding: '0 24px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  height: '36px',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  fontFamily: "'Poppins', sans-serif",
+                }}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -250,98 +250,508 @@ app.whenReady().then(() => {
         
         // Handle process completion
         pythonProcess.on('close', (code) => {
-          console.log(`Python process exited with code ${code}`);
-          
           if (code !== 0) {
-            reject(new Error(`Python process failed with code ${code}: ${errorString}`));
+            console.error(`Python process exited with code ${code}, error: ${errorString}`);
+            reject(new Error(`Process exited with code ${code}: ${errorString}`));
             return;
           }
           
-          console.log("Datos recibidos del proceso Python:");
-          console.log("----- INICIO DE DATOS -----");
-          console.log(dataString);
-          console.log("----- FIN DE DATOS -----");
-          
-          // Extract the JSON result from the output
+          // Extract JSON result from output
           try {
-            // Look for delimited JSON in the output
-            const jsonPattern = /===JSON_RESULT_START===\n([\s\S]*?)===JSON_RESULT_END===/;
-            const match = dataString.match(jsonPattern);
+            // Buscar el resultado JSON entre delimitadores
+            const startMarker = '===JSON_RESULT_START===';
+            const endMarker = '===JSON_RESULT_END===';
             
-            if (match && match[1]) {
-              console.log("JSON encontrado con delimitadores:");
-              console.log(match[1]);
-              
-              // Trim y limpiar el JSON antes de parsear
-              const jsonText = match[1].trim();
-              const jsonData = JSON.parse(jsonText);
-              resolve(jsonData);
-            } else {
-              console.log("No se encontró JSON delimitado, buscando cualquier JSON en la salida");
-              
-              // Buscar algún objeto JSON válido en la salida
-              const jsonRegex = /(\{[\s\S]*?\})/g;
-              const matches = [...dataString.matchAll(jsonRegex)];
-              
-              if (matches.length > 0) {
-                // Intentar parsear cada coincidencia hasta encontrar una válida
-                for (const m of matches) {
-                  try {
-                    console.log("Intentando analizar posible JSON:", m[1]);
-                    const jsonData = JSON.parse(m[1]);
-                    console.log("JSON válido encontrado:", jsonData);
-                    resolve(jsonData);
-                    return;
-                  } catch (parseErr) {
-                    console.log("Error al parsear esta coincidencia, probando la siguiente...");
-                  }
-                }
-              }
-              
-              // Si llegamos aquí, no se encontró ningún JSON válido
-              console.log("No se encontró ningún JSON válido en toda la salida");
-              
-              // En caso de error, devolver un objeto de datos simulado para propósitos de prueba
-              const mockData = {
-                nombre: "Herramienta de Ejemplo",
-                modelo: "ME-100",
-                numero_serie: "SN123456",
-                estado: "Nuevo",
-                fecha_adquisicion: new Date().toISOString().split('T')[0],
-                ultimo_mantenimiento: new Date().toISOString().split('T')[0],
-                proximo_mantenimiento: new Date(Date.now() + 90*24*60*60*1000).toISOString().split('T')[0],
-                ubicacion: "Taller principal",
-                responsable: "Técnico de mantenimiento",
-                descripcion: "Esta es una herramienta de ejemplo creada porque no se pudo extraer datos del PDF."
-              };
-              
-              console.log("Devolviendo datos simulados para prevenir error en UI:", mockData);
-              resolve(mockData);
+            const startIdx = dataString.indexOf(startMarker);
+            const endIdx = dataString.indexOf(endMarker);
+            
+            if (startIdx === -1 || endIdx === -1) {
+              reject(new Error('No se encontró el resultado JSON en la salida del proceso'));
+              return;
             }
-          } catch (err: any) {
-            console.error('Error parsing Python output:', err);
             
-            // En caso de error, devolver un objeto de datos simulado para propósitos de prueba
-            const mockData = {
-              nombre: "Herramienta de Ejemplo (Error)",
-              modelo: "ME-100",
-              numero_serie: "SN123456",
-              estado: "Nuevo",
-              fecha_adquisicion: new Date().toISOString().split('T')[0],
-              ultimo_mantenimiento: new Date().toISOString().split('T')[0],
-              proximo_mantenimiento: new Date(Date.now() + 90*24*60*60*1000).toISOString().split('T')[0],
-              ubicacion: "Taller principal",
-              responsable: "Técnico de mantenimiento",
-              descripcion: `Error al procesar el PDF: ${err.message}`
-            };
+            const jsonStr = dataString.substring(startIdx + startMarker.length, endIdx).trim();
+            const result = JSON.parse(jsonStr);
             
-            console.log("Devolviendo datos simulados debido a error:", mockData);
-            resolve(mockData);
+            resolve(result);
+          } catch (error) {
+            console.error('Error parsing JSON result:', error);
+            reject(error);
           }
+        });
+        
+        // Handle process error
+        pythonProcess.on('error', (error) => {
+          console.error('Error starting Python process:', error);
+          reject(error);
         });
       });
     } catch (error) {
-      console.error('Error running OCR process:', error);
+      console.error('Error in OCR processing:', error);
+      throw error;
+    }
+  });
+  
+  // IPC handler para OCR de productos
+  ipcMain.handle('process-producto-ocr', async (event, filePath) => {
+    try {
+      console.log(`Processing product file with OCR: ${filePath}`);
+      
+      // Resolve path to the Python script for products
+      const appRootPath = process.env.APP_ROOT || __dirname;
+      const scriptPath = path.join(appRootPath, 'ai_service', 'services', 'ocr_producto.py');
+      const servicesDir = path.join(appRootPath, 'ai_service', 'services');
+      
+      console.log(`Script path: ${scriptPath}`);
+      
+      // Verificar que el archivo existe
+      if (!fs.existsSync(scriptPath)) {
+        throw new Error(`Script not found at path: ${scriptPath}`);
+      }
+      
+      // Encontrar el ejecutable de Python
+      const pythonExecutable = findPythonExecutable();
+      
+      return new Promise((resolve, reject) => {
+        // Configurar variables de entorno para Python
+        const env = { 
+          ...process.env, 
+          PYTHONPATH: servicesDir,
+          PYTHONIOENCODING: 'utf-8'
+        };
+        
+        // Argumentos para el proceso Python
+        const args = [scriptPath, filePath, '--raw'];
+        console.log(`Executing: ${pythonExecutable} ${args.join(' ')}`);
+        
+        // Spawn Python process
+        const pythonProcess = spawn(pythonExecutable, args, { 
+          env,
+          shell: process.platform === 'win32'
+        });
+        
+        let dataString = '';
+        let errorString = '';
+        
+        // Collect data from stdout
+        pythonProcess.stdout.on('data', (data) => {
+          dataString += data.toString();
+        });
+        
+        // Collect errors from stderr
+        pythonProcess.stderr.on('data', (data) => {
+          errorString += data.toString();
+          console.error(`Python stderr: ${data}`);
+        });
+        
+        // Handle process completion
+        pythonProcess.on('close', (code) => {
+          if (code !== 0) {
+            console.error(`Python process exited with code ${code}, error: ${errorString}`);
+            reject(new Error(`Process exited with code ${code}: ${errorString}`));
+            return;
+          }
+          
+          // Extract JSON result from output
+          try {
+            // Buscar el resultado JSON entre delimitadores
+            const startMarker = '===JSON_RESULT_START===';
+            const endMarker = '===JSON_RESULT_END===';
+            
+            const startIdx = dataString.indexOf(startMarker);
+            const endIdx = dataString.indexOf(endMarker);
+            
+            if (startIdx === -1 || endIdx === -1) {
+              reject(new Error('No se encontró el resultado JSON en la salida del proceso'));
+              return;
+            }
+            
+            const jsonStr = dataString.substring(startIdx + startMarker.length, endIdx).trim();
+            const result = JSON.parse(jsonStr);
+            
+            resolve(result);
+          } catch (error) {
+            console.error('Error parsing JSON result:', error);
+            reject(error);
+          }
+        });
+        
+        // Handle process error
+        pythonProcess.on('error', (error) => {
+          console.error('Error starting Python process:', error);
+          reject(error);
+        });
+      });
+    } catch (error) {
+      console.error('Error in product OCR processing:', error);
+      throw error;
+    }
+  });
+  
+  // IPC handler para OCR de materiales
+  ipcMain.handle('process-material-ocr', async (event, filePath) => {
+    try {
+      console.log(`Processing material file with OCR: ${filePath}`);
+      
+      // Resolve path to the Python script for materials
+      const appRootPath = process.env.APP_ROOT || __dirname;
+      const scriptPath = path.join(appRootPath, 'ai_service', 'services', 'ocr_material.py');
+      const servicesDir = path.join(appRootPath, 'ai_service', 'services');
+      
+      console.log(`Script path: ${scriptPath}`);
+      
+      // Verificar que el archivo existe
+      if (!fs.existsSync(scriptPath)) {
+        throw new Error(`Script not found at path: ${scriptPath}`);
+      }
+      
+      // Encontrar el ejecutable de Python
+      const pythonExecutable = findPythonExecutable();
+      
+      return new Promise((resolve, reject) => {
+        // Configurar variables de entorno para Python
+        const env = { 
+          ...process.env, 
+          PYTHONPATH: servicesDir,
+          PYTHONIOENCODING: 'utf-8'
+        };
+        
+        // Argumentos para el proceso Python
+        const args = [scriptPath, filePath, '--raw'];
+        console.log(`Executing: ${pythonExecutable} ${args.join(' ')}`);
+        
+        // Spawn Python process
+        const pythonProcess = spawn(pythonExecutable, args, { 
+          env,
+          shell: process.platform === 'win32'
+        });
+        
+        let dataString = '';
+        let errorString = '';
+        
+        // Collect data from stdout
+        pythonProcess.stdout.on('data', (data) => {
+          dataString += data.toString();
+        });
+        
+        // Collect errors from stderr
+        pythonProcess.stderr.on('data', (data) => {
+          errorString += data.toString();
+          console.error(`Python stderr: ${data}`);
+        });
+        
+        // Handle process completion
+        pythonProcess.on('close', (code) => {
+          if (code !== 0) {
+            console.error(`Python process exited with code ${code}, error: ${errorString}`);
+            reject(new Error(`Process exited with code ${code}: ${errorString}`));
+            return;
+          }
+          
+          // Extract JSON result from output
+          try {
+            // Buscar el resultado JSON entre delimitadores
+            const startMarker = '===JSON_RESULT_START===';
+            const endMarker = '===JSON_RESULT_END===';
+            
+            const startIdx = dataString.indexOf(startMarker);
+            const endIdx = dataString.indexOf(endMarker);
+            
+            if (startIdx === -1 || endIdx === -1) {
+              reject(new Error('No se encontró el resultado JSON en la salida del proceso'));
+              return;
+            }
+            
+            const jsonStr = dataString.substring(startIdx + startMarker.length, endIdx).trim();
+            const result = JSON.parse(jsonStr);
+            
+            resolve(result);
+          } catch (error) {
+            console.error('Error parsing JSON result:', error);
+            reject(error);
+          }
+        });
+        
+        // Handle process error
+        pythonProcess.on('error', (error) => {
+          console.error('Error starting Python process:', error);
+          reject(error);
+        });
+      });
+    } catch (error) {
+      console.error('Error in material OCR processing:', error);
+      throw error;
+    }
+  });
+  
+  // IPC handler para procesar texto de productos
+  ipcMain.handle('process-producto-text', async (event, rawText) => {
+    try {
+      console.log(`Processing product text with AI`);
+      
+      // Resolve path to the Python script
+      const appRootPath = process.env.APP_ROOT || __dirname;
+      const servicesDir = path.join(appRootPath, 'ai_service', 'services');
+      
+      // Crear un archivo temporal con el texto
+      const tempDir = path.join(os.tmpdir(), 'zapateria-temp');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+      
+      const tempFile = path.join(tempDir, `text_${Date.now()}.txt`);
+      fs.writeFileSync(tempFile, rawText, 'utf8');
+      
+      // Importar directamente gemma_agent_producto.py
+      const scriptPath = path.join(appRootPath, 'ai_service', 'services', 'gemma_agent_producto.py');
+      
+      // Verificar que el archivo existe
+      if (!fs.existsSync(scriptPath)) {
+        throw new Error(`Script not found at path: ${scriptPath}`);
+      }
+      
+      // Encontrar el ejecutable de Python
+      const pythonExecutable = findPythonExecutable();
+      
+      return new Promise((resolve, reject) => {
+        // Código para ejecutar el módulo de Python - Corregir manejo de rutas para evitar errores Unicode
+        const normalizedServicesDir = servicesDir.replace(/\\/g, '/');
+        const normalizedTempFile = tempFile.replace(/\\/g, '/');
+        
+        const code = `
+import sys
+sys.path.append(r'${normalizedServicesDir}')
+from gemma_agent_producto import extraer_datos_producto
+
+with open(r'${normalizedTempFile}', 'r', encoding='utf-8') as f:
+    text = f.read()
+
+result = extraer_datos_producto(text)
+import json
+print("===JSON_RESULT_START===")
+if isinstance(result, str):
+    print(result)
+else:
+    print(json.dumps(result, ensure_ascii=False))
+print("===JSON_RESULT_END===")
+`;
+        
+        // Guardar código en archivo temporal
+        const tempCodeFile = path.join(tempDir, `temp_code_${Date.now()}.py`);
+        fs.writeFileSync(tempCodeFile, code, 'utf8');
+        
+        // Configurar variables de entorno para Python
+        const env = { 
+          ...process.env, 
+          PYTHONPATH: servicesDir,
+          PYTHONIOENCODING: 'utf-8'
+        };
+        
+        // Ejecutar el código Python
+        console.log(`Executing Python with temp code file: ${tempCodeFile}`);
+        const pythonProcess = spawn(pythonExecutable, [tempCodeFile], { 
+          env,
+          shell: process.platform === 'win32'
+        });
+        
+        let dataString = '';
+        let errorString = '';
+        
+        // Collect data from stdout
+        pythonProcess.stdout.on('data', (data) => {
+          dataString += data.toString();
+        });
+        
+        // Collect errors from stderr
+        pythonProcess.stderr.on('data', (data) => {
+          errorString += data.toString();
+          console.error(`Python stderr: ${data}`);
+        });
+        
+        // Handle process completion
+        pythonProcess.on('close', (code) => {
+          try {
+            // Limpiar archivos temporales
+            fs.unlinkSync(tempFile);
+            fs.unlinkSync(tempCodeFile);
+          } catch (e) {
+            console.error('Error cleaning temporary files:', e);
+          }
+          
+          if (code !== 0) {
+            console.error(`Python process exited with code ${code}, error: ${errorString}`);
+            reject(new Error(`Process exited with code ${code}: ${errorString}`));
+            return;
+          }
+          
+          // Extract JSON result from output
+          try {
+            // Buscar el resultado JSON entre delimitadores
+            const startMarker = '===JSON_RESULT_START===';
+            const endMarker = '===JSON_RESULT_END===';
+            
+            const startIdx = dataString.indexOf(startMarker);
+            const endIdx = dataString.indexOf(endMarker);
+            
+            if (startIdx === -1 || endIdx === -1) {
+              reject(new Error('No se encontró el resultado JSON en la salida del proceso'));
+              return;
+            }
+            
+            const jsonStr = dataString.substring(startIdx + startMarker.length, endIdx).trim();
+            const result = JSON.parse(jsonStr);
+            
+            resolve(result);
+          } catch (error) {
+            console.error('Error parsing JSON result:', error);
+            reject(error);
+          }
+        });
+        
+        // Handle process error
+        pythonProcess.on('error', (error) => {
+          console.error('Error starting Python process:', error);
+          reject(error);
+        });
+      });
+    } catch (error) {
+      console.error('Error in product text processing:', error);
+      throw error;
+    }
+  });
+  
+  // IPC handler para procesar texto de materiales
+  ipcMain.handle('process-material-text', async (event, rawText) => {
+    try {
+      console.log(`Processing material text with AI`);
+      
+      // Resolve path to the Python script
+      const appRootPath = process.env.APP_ROOT || __dirname;
+      const servicesDir = path.join(appRootPath, 'ai_service', 'services');
+      
+      // Crear un archivo temporal con el texto
+      const tempDir = path.join(os.tmpdir(), 'zapateria-temp');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+      
+      const tempFile = path.join(tempDir, `text_${Date.now()}.txt`);
+      fs.writeFileSync(tempFile, rawText, 'utf8');
+      
+      // Importar directamente gemma_agent_material.py
+      const scriptPath = path.join(appRootPath, 'ai_service', 'services', 'gemma_agent_material.py');
+      
+      // Verificar que el archivo existe
+      if (!fs.existsSync(scriptPath)) {
+        throw new Error(`Script not found at path: ${scriptPath}`);
+      }
+      
+      // Encontrar el ejecutable de Python
+      const pythonExecutable = findPythonExecutable();
+      
+      return new Promise((resolve, reject) => {
+        // Código para ejecutar el módulo de Python - Corregir manejo de rutas para evitar errores Unicode
+        const normalizedServicesDir = servicesDir.replace(/\\/g, '/');
+        const normalizedTempFile = tempFile.replace(/\\/g, '/');
+        
+        const code = `
+import sys
+sys.path.append(r'${normalizedServicesDir}')
+from gemma_agent_material import extraer_datos_material
+
+with open(r'${normalizedTempFile}', 'r', encoding='utf-8') as f:
+    text = f.read()
+
+result = extraer_datos_material(text)
+import json
+print("===JSON_RESULT_START===")
+if isinstance(result, str):
+    print(result)
+else:
+    print(json.dumps(result, ensure_ascii=False))
+print("===JSON_RESULT_END===")
+`;
+        
+        // Guardar código en archivo temporal
+        const tempCodeFile = path.join(tempDir, `temp_code_${Date.now()}.py`);
+        fs.writeFileSync(tempCodeFile, code, 'utf8');
+        
+        // Configurar variables de entorno para Python
+        const env = { 
+          ...process.env, 
+          PYTHONPATH: servicesDir,
+          PYTHONIOENCODING: 'utf-8'
+        };
+        
+        // Ejecutar el código Python
+        console.log(`Executing Python with temp code file: ${tempCodeFile}`);
+        const pythonProcess = spawn(pythonExecutable, [tempCodeFile], { 
+          env,
+          shell: process.platform === 'win32'
+        });
+        
+        let dataString = '';
+        let errorString = '';
+        
+        // Collect data from stdout
+        pythonProcess.stdout.on('data', (data) => {
+          dataString += data.toString();
+        });
+        
+        // Collect errors from stderr
+        pythonProcess.stderr.on('data', (data) => {
+          errorString += data.toString();
+          console.error(`Python stderr: ${data}`);
+        });
+        
+        // Handle process completion
+        pythonProcess.on('close', (code) => {
+          try {
+            // Limpiar archivos temporales
+            fs.unlinkSync(tempFile);
+            fs.unlinkSync(tempCodeFile);
+          } catch (e) {
+            console.error('Error cleaning temporary files:', e);
+          }
+          
+          if (code !== 0) {
+            console.error(`Python process exited with code ${code}, error: ${errorString}`);
+            reject(new Error(`Process exited with code ${code}: ${errorString}`));
+            return;
+          }
+          
+          // Extract JSON result from output
+          try {
+            // Buscar el resultado JSON entre delimitadores
+            const startMarker = '===JSON_RESULT_START===';
+            const endMarker = '===JSON_RESULT_END===';
+            
+            const startIdx = dataString.indexOf(startMarker);
+            const endIdx = dataString.indexOf(endMarker);
+            
+            if (startIdx === -1 || endIdx === -1) {
+              reject(new Error('No se encontró el resultado JSON en la salida del proceso'));
+              return;
+            }
+            
+            const jsonStr = dataString.substring(startIdx + startMarker.length, endIdx).trim();
+            const result = JSON.parse(jsonStr);
+            
+            resolve(result);
+          } catch (error) {
+            console.error('Error parsing JSON result:', error);
+            reject(error);
+          }
+        });
+        
+        // Handle process error
+        pythonProcess.on('error', (error) => {
+          console.error('Error starting Python process:', error);
+          reject(error);
+        });
+      });
+    } catch (error) {
+      console.error('Error in material text processing:', error);
       throw error;
     }
   });

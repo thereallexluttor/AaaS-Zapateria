@@ -1,5 +1,6 @@
 import { Material, Herramienta, Producto } from '../lib/supabase';
-import { EyeIcon, TagIcon, ClockIcon, CurrencyDollarIcon, ChartBarIcon, SwatchIcon, ScaleIcon, CalendarIcon, CubeIcon, ShoppingBagIcon, QrCodeIcon } from '@heroicons/react/24/outline';
+import { EyeIcon, TagIcon, ClockIcon, CurrencyDollarIcon, ChartBarIcon, SwatchIcon, ScaleIcon, CalendarIcon, CubeIcon, ShoppingBagIcon, QrCodeIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { useState } from 'react';
 
 // Combinar los tipos para poder trabajar con cualquier ítem del inventario
 export type InventoryItemType = 
@@ -167,144 +168,94 @@ function getTypeIcon(type: 'material' | 'herramienta' | 'producto'): string {
 
 // Obtener la información adicional del producto (mockup)
 function getProductAdditionalInfo(producto: Producto & { type: 'producto' }): ProductoMockupData {
-  // Mockup de datos que aún no existen en la tabla Producto
-  // Estos datos son ficticios y serán reemplazados cuando se agreguen a la tabla
+  // Usar datos reales del producto en lugar de simulados
+  const categoria = producto.categoria || 'No especificada';
   
-  // Generar categoría basada en el nombre para el mockup
-  let categoria = 'Calzado casual';
-  if (producto.nombre.toLowerCase().includes('bota')) {
-    categoria = 'Botas';
-  } else if (producto.nombre.toLowerCase().includes('sandalia')) {
-    categoria = 'Sandalias';
-  } else if (producto.nombre.toLowerCase().includes('deportivo')) {
-    categoria = 'Deportivo';
-  }
+  // Usar el precio real
+  const precio = producto.precio || '0.00';
   
-  // Mockup de precio basado en el id
-  const precioBase = 29.99;
-  const id = producto.id ? parseInt(String(producto.id).substring(0, 5), 16) : 0;
-  const precio = (precioBase + (id % 70)).toFixed(2);
+  // Tiempo de fabricación real
+  const tiempoFabricacion = producto.tiempo_fabricacion || 'No especificado';
   
-  // Popularidad basada en el stock (si hay poco stock podría ser popular)
-  const stock = producto.stock ? parseInt(producto.stock) : 0;
-  const popularidad = Math.max(1, Math.min(10, 10 - Math.floor(stock / 10)));
+  // Popularidad (por ahora valor por defecto)
+  const popularidad = 5;
   
-  // Fecha de la última venta formateada
-  const ultimaVentaDate = new Date(Date.now() - Math.floor(Math.random() * 30) * 24 * 60 * 60 * 1000);
-  const ultimaVentaStr = ultimaVentaDate.toLocaleDateString();
+  // Fecha de última venta (por ahora valor por defecto)
+  const ultimaVentaStr = 'No registrada';
+  
+  // Tallas
+  const tallas = producto.tallas ? producto.tallas.split(',').map(t => t.trim()) : [];
+  
+  // Colores
+  const colores = producto.colores ? producto.colores.split(',').map(c => c.trim()) : [];
   
   return {
     precio_venta: precio,
     categoria: categoria,
-    tiempo_fabricacion: `${Math.floor(Math.random() * 24) + 1} horas`,
+    tiempo_fabricacion: tiempoFabricacion,
     popularidad: popularidad,
     ultima_venta: ultimaVentaStr,
-    tallas_disponibles: ['36', '37', '38', '39', '40', '41', '42'],
-    materiales_usados: ['Cuero', 'Goma', 'Textil'],
-    margen_ganancia: `${Math.floor(Math.random() * 30) + 20}%`,
-    tags: ['Nuevo', 'Temporada', 'Oferta'],
-    temporada: Math.random() > 0.5 ? 'Verano' : 'Invierno'
+    tallas_disponibles: tallas,
+    materiales_usados: [],
+    margen_ganancia: 'No especificado',
+    tags: [],
+    temporada: 'Actual'
   };
 }
 
 // Obtener la información adicional del material (mockup)
 function getMaterialAdditionalInfo(material: Material & { type: 'material' }): MaterialMockupData {
-  // Mockup de datos que aún no existen en la tabla Material
+  // Usar los datos reales del material en lugar de datos simulados
+  const proveedor = material.proveedor || 'No especificado';
   
-  // Proveedores ficticios
-  const proveedores = ['CueroFino S.A.', 'TextilesMax', 'MaterialesPremium', 'InsumosPro', 'ImportadoraGlobal'];
-  const proveedor = proveedores[Math.floor(Math.random() * proveedores.length)];
-  
-  // Precio unitario basado en el nombre
-  let precioBase = 10.50;
-  if (material.nombre.toLowerCase().includes('cuero')) {
-    precioBase = 45.75;
-  } else if (material.nombre.toLowerCase().includes('tela')) {
-    precioBase = 15.25;
-  } else if (material.nombre.toLowerCase().includes('goma')) {
-    precioBase = 20.30;
-  }
+  // Usar el precio real del material
+  const precioBase = material.precio ? parseFloat(material.precio) : 10.50;
+  const precioUnitario = `$${precioBase.toFixed(2)}`;
   
   // Fecha de última compra
-  const ultimaCompraDate = new Date(Date.now() - Math.floor(Math.random() * 90) * 24 * 60 * 60 * 1000);
-  const ultimaCompraStr = ultimaCompraDate.toLocaleDateString();
+  const ultimaCompra = material.fecha_adquisicion || 'No registrada';
   
-  // Características especiales basadas en el nombre
-  let caracteristicas = ['Flexible', 'Duradero'];
-  if (material.nombre.toLowerCase().includes('cuero')) {
-    caracteristicas = ['Resistente al agua', 'Alta durabilidad', 'Premium'];
-  } else if (material.nombre.toLowerCase().includes('tela')) {
-    caracteristicas = ['Transpirable', 'Ligero', 'Fácil mantenimiento'];
-  } else if (material.nombre.toLowerCase().includes('goma')) {
-    caracteristicas = ['Antideslizante', 'Resistente al desgaste'];
-  }
-  
-  // Colores basados en el nombre
-  let color = 'Variado';
-  if (material.nombre.toLowerCase().includes('negro')) {
-    color = 'Negro';
-  } else if (material.nombre.toLowerCase().includes('marron') || material.nombre.toLowerCase().includes('marrón')) {
-    color = 'Marrón';
-  } else if (material.nombre.toLowerCase().includes('rojo')) {
-    color = 'Rojo';
-  }
+  // Usar datos reales para el resto de campos o valores por defecto
+  const color = 'Variado';
+  const medidas = material.unidades || 'No especificado';
   
   return {
     proveedor: proveedor,
-    precio_unitario: `$${precioBase.toFixed(2)}`,
-    ultima_compra: ultimaCompraStr,
-    tiempo_entrega: `${Math.floor(Math.random() * 14) + 3} días`,
-    calidad: ['Estándar', 'Premium', 'Económica'][Math.floor(Math.random() * 3)],
+    precio_unitario: precioUnitario,
+    ultima_compra: ultimaCompra,
+    tiempo_entrega: 'Por definir',
+    calidad: 'Estándar',
     color: color,
-    medidas: `${Math.floor(Math.random() * 100) + 50}cm x ${Math.floor(Math.random() * 50) + 20}cm`,
-    usos_comunes: ['Calzado casual', 'Botas', 'Sandalias'],
-    caracteristicas_especiales: caracteristicas
+    medidas: medidas,
+    usos_comunes: ['Por definir'],
+    caracteristicas_especiales: ['Por definir']
   };
 }
 
 // Obtener la información adicional de la herramienta (mockup)
 function getHerramientaAdditionalInfo(herramienta: Herramienta & { type: 'herramienta' }): HerramientaMockupData {
-  // Mockup de datos que aún no existen en la tabla Herramienta
+  // Usar datos reales de la herramienta
+  const marca = 'No especificada';
+  const modelo = herramienta.modelo || 'No especificado';
   
-  // Marcas ficticias
-  const marcas = ['ToolsMaster', 'ProCraft', 'IndustrialTech', 'CraftPro', 'ShoeEquip'];
-  const marca = marcas[Math.floor(Math.random() * marcas.length)];
+  // Fechas reales
+  const fechaAdquisicion = herramienta.fecha_adquisicion || 'No registrada';
+  const ultimoMantenimiento = herramienta.ultimo_mantenimiento || 'No registrado';
+  const proximoMantenimiento = herramienta.proximo_mantenimiento || 'No programado';
   
-  // Modelo basado en el nombre
-  const modelo = `${herramienta.nombre.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
-  
-  // Fechas aleatorias
-  const fechaAdquisicion = new Date(Date.now() - Math.floor(Math.random() * 365 * 2) * 24 * 60 * 60 * 1000);
-  const fechaAdquisicionStr = fechaAdquisicion.toLocaleDateString();
-  
-  const fechaUltimoMantenimiento = new Date(Date.now() - Math.floor(Math.random() * 90) * 24 * 60 * 60 * 1000);
-  const fechaUltimoMantenimientoStr = fechaUltimoMantenimiento.toLocaleDateString();
-  
-  const proximaRevision = new Date(Date.now() + Math.floor(Math.random() * 90) * 24 * 60 * 60 * 1000);
-  const proximaRevisionStr = proximaRevision.toLocaleDateString();
-  
-  // Ubicaciones ficticias
-  const ubicaciones = ['Taller principal', 'Armario herramientas', 'Cajón A', 'Cajón B', 'Estante superior'];
-  const ubicacion = ubicaciones[Math.floor(Math.random() * ubicaciones.length)];
-  
-  // Accesorios basados en el nombre
-  let accesorios = ['Manual de uso'];
-  if (herramienta.nombre.toLowerCase().includes('máquina') || herramienta.nombre.toLowerCase().includes('maquina')) {
-    accesorios = ['Repuestos básicos', 'Cable de alimentación', 'Manual de mantenimiento'];
-  } else if (herramienta.nombre.toLowerCase().includes('martillo')) {
-    accesorios = ['Cabezal de repuesto', 'Estuche'];
-  }
+  // Ubicación real
+  const ubicacion = herramienta.ubicacion || 'No especificada';
   
   return {
     marca: marca,
     modelo: modelo,
-    fecha_adquisicion: fechaAdquisicionStr,
-    fecha_ultimo_mantenimiento: fechaUltimoMantenimientoStr,
-    proxima_revision: proximaRevisionStr,
-    garantia: `${Math.floor(Math.random() * 24) + 12} meses`,
+    fecha_adquisicion: fechaAdquisicion,
+    fecha_ultimo_mantenimiento: ultimoMantenimiento,
+    proxima_revision: proximoMantenimiento,
+    garantia: 'No especificada',
     ubicacion: ubicacion,
-    instrucciones: 'Ver manual adjunto',
-    accesorios: accesorios
+    instrucciones: 'No disponibles',
+    accesorios: []
   };
 }
 
@@ -316,6 +267,7 @@ function formatPrice(price: string): string {
 }
 
 export default function InventoryItem({ item, onViewDetails }: InventoryItemProps) {
+  const [showQR, setShowQR] = useState(false);
   const status = getItemStatus(item);
   const reference = getItemReference(item);
   const stock = getItemStock(item);
@@ -342,44 +294,57 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
       : '#ECFDF5';
   
   // Verificar si el elemento tiene un código QR
-  const hasQRCode = item.qr_code && item.qr_code.length > 0;
+  const hasQRCode = item.QR_Code && item.QR_Code.length > 0;
+
+  // Manejador para mostrar el QR
+  const handleQRClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (hasQRCode) {
+      setShowQR(!showQR);
+    }
+  };
   
   return (
     <div style={{
       backgroundColor: 'white',
-      borderRadius: '6px',
+      borderRadius: '8px',
       padding: '16px',
       display: 'flex',
       flexDirection: 'column',
       border: '1px solid #E5E7EB',
-      gap: '12px',
+      gap: '14px',
       transition: 'all 0.3s ease',
       cursor: 'pointer',
-      margin: '10px 0',
+      margin: '12px 0',
       fontFamily: "'Poppins', sans-serif",
+      position: 'relative',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
     }}
     onMouseEnter={(e) => {
       e.currentTarget.style.transform = 'translateY(-2px)';
       e.currentTarget.style.borderColor = '#D1D5DB';
+      e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.05)';
       e.currentTarget.style.backgroundColor = '#FAFAFA';
     }}
     onMouseLeave={(e) => {
       e.currentTarget.style.transform = 'translateY(0)';
       e.currentTarget.style.borderColor = '#E5E7EB';
+      e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
       e.currentTarget.style.backgroundColor = 'white';
     }}
     onClick={() => onViewDetails(item)}
     >
       {/* Sección principal con información básica */}
       <div style={{
-        display: 'flex',
+        display: 'grid',
+        gridTemplateColumns: '60px 1fr 80px 120px auto',
+        gap: '16px',
         alignItems: 'center',
-        gap: '18px',
       }}>
         {/* Icono/Imagen */}
         <div style={{ 
-          width: '52px', 
-          height: '52px', 
+          width: '60px', 
+          height: '60px', 
           borderRadius: '6px',
           overflow: 'hidden',
           flexShrink: 0,
@@ -391,31 +356,36 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           
           {/* Indicador de QR disponible */}
           {hasQRCode && (
-            <div style={{
-              position: 'absolute',
-              bottom: 0,
-              right: 0,
-              backgroundColor: 'rgba(255,255,255,0.9)',
-              borderRadius: '50%',
-              padding: '2px',
-              width: '16px',
-              height: '16px',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center'
-            }}>
-              <QrCodeIcon style={{ width: '12px', height: '12px', color: '#4F46E5' }} />
+            <div 
+              style={{
+                position: 'absolute',
+                bottom: '2px',
+                right: '2px',
+                backgroundColor: 'rgba(255,255,255,0.9)',
+                borderRadius: '50%',
+                padding: '2px',
+                width: '18px',
+                height: '18px',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                cursor: 'pointer',
+                zIndex: 5,
+              }}
+              onClick={handleQRClick}
+              title="Ver código QR"
+            >
+              <QrCodeIcon style={{ width: '14px', height: '14px', color: '#4F46E5' }} />
             </div>
           )}
         </div>
         
         {/* Nombre e información adicional */}
-        <div style={{ flex: 1 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <div style={{ 
             fontSize: '16px', 
             fontWeight: 600, 
             color: '#111827',
-            marginBottom: '7px',
             display: 'flex',
             alignItems: 'center',
             gap: '6px'
@@ -443,15 +413,14 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
         
         {/* Cantidad */}
         <div style={{ 
-          textAlign: 'center',
           fontSize: '16px',
           fontWeight: 600,
           color: '#111827',
           backgroundColor: '#F9FAFB',
           borderRadius: '6px',
-          padding: '9px 14px',
-          minWidth: '60px',
+          padding: '10px 12px',
           border: '1px solid #E5E7EB',
+          textAlign: 'center',
         }}>
           {stock}
         </div>
@@ -459,17 +428,18 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
         {/* Estado */}
         <div style={{ 
           textAlign: 'center',
-          minWidth: '120px'
         }}>
           <span style={{ 
             fontSize: '13px',
             fontWeight: 600,
-            padding: '7px 14px',
-            borderRadius: '30px',
+            padding: '8px 14px',
+            borderRadius: '6px',
             backgroundColor: `${status.color}15`,
             color: status.color,
             border: `1px solid ${status.color}40`,
-            letterSpacing: '0.2px'
+            letterSpacing: '0.2px',
+            display: 'inline-block',
+            width: '100%',
           }}>
             {status.text}
           </span>
@@ -477,7 +447,7 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
         
         {/* Botón de detalle */}
         <button style={{
-          backgroundColor: '#F9FAFB',
+          backgroundColor: '#F3F4F6',
           border: '1px solid #E5E7EB',
           borderRadius: '6px',
           padding: '10px 18px',
@@ -489,6 +459,8 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           gap: '8px',
           cursor: 'pointer',
           transition: 'all 0.2s ease',
+          height: '42px',
+          justifyContent: 'center',
         }}
         onMouseEnter={(e) => {
           e.stopPropagation();
@@ -498,7 +470,7 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
         }}
         onMouseLeave={(e) => {
           e.stopPropagation();
-          e.currentTarget.style.backgroundColor = '#F9FAFB';
+          e.currentTarget.style.backgroundColor = '#F3F4F6';
           e.currentTarget.style.borderColor = '#E5E7EB';
           e.currentTarget.style.color = '#4F46E5';
         }}
@@ -512,29 +484,136 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
         </button>
       </div>
       
+      {/* Sección expandida del QR */}
+      {showQR && hasQRCode && (
+        <div 
+          style={{
+            borderTop: '1px solid #E5E7EB',
+            paddingTop: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            padding: '16px',
+            position: 'relative',
+            backgroundColor: '#F9FAFB',
+            borderRadius: '6px',
+            margin: '0 -8px',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            style={{
+              position: 'absolute',
+              top: '10px',
+              right: '10px',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '5px',
+            }}
+            onClick={handleQRClick}
+          >
+            <XMarkIcon style={{ width: '20px', height: '20px', color: '#6B7280' }} />
+          </button>
+          
+          <h3 style={{ marginBottom: '15px', fontSize: '16px', fontWeight: 600, color: '#111827' }}>
+            Código QR de {item.nombre}
+          </h3>
+          
+          <div 
+            style={{ 
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '20px',
+              width: '100%',
+              alignItems: 'center',
+            }}
+          >
+            <div style={{ 
+              padding: '15px', 
+              border: '1px solid #E5E7EB', 
+              borderRadius: '8px',
+              backgroundColor: 'white',
+              display: 'flex',
+              justifyContent: 'center',
+            }}>
+              <img 
+                src={item.QR_Code} 
+                alt={`QR de ${item.nombre}`} 
+                style={{ 
+                  maxWidth: '200px', 
+                  maxHeight: '200px',
+                  width: '100%',
+                  height: 'auto',
+                }} 
+              />
+            </div>
+            
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              padding: '10px',
+            }}>
+              <p style={{ fontSize: '14px', color: '#4B5563', margin: 0, padding: '8px', backgroundColor: 'white', borderRadius: '6px', border: '1px solid #E5E7EB' }}>
+                <strong>Referencia:</strong> {reference}
+              </p>
+              <p style={{ fontSize: '14px', color: '#4B5563', margin: 0, padding: '8px', backgroundColor: 'white', borderRadius: '6px', border: '1px solid #E5E7EB' }}>
+                <strong>Tipo:</strong> {item.type === 'material' ? 'Material' : item.type === 'herramienta' ? 'Herramienta' : 'Producto'}
+              </p>
+              {item.type === 'producto' && (
+                <p style={{ fontSize: '14px', color: '#4B5563', margin: 0, padding: '8px', backgroundColor: 'white', borderRadius: '6px', border: '1px solid #E5E7EB' }}>
+                  <strong>Precio:</strong> {productInfo?.precio_venta ? formatPrice(productInfo.precio_venta) : 'No disponible'}
+                </p>
+              )}
+              {item.type === 'material' && (
+                <p style={{ fontSize: '14px', color: '#4B5563', margin: 0, padding: '8px', backgroundColor: 'white', borderRadius: '6px', border: '1px solid #E5E7EB' }}>
+                  <strong>Proveedor:</strong> {materialInfo?.proveedor || 'No disponible'}
+                </p>
+              )}
+              {item.type === 'herramienta' && (
+                <p style={{ fontSize: '14px', color: '#4B5563', margin: 0, padding: '8px', backgroundColor: 'white', borderRadius: '6px', border: '1px solid #E5E7EB' }}>
+                  <strong>Ubicación:</strong> {herramientaInfo?.ubicacion || 'No disponible'}
+                </p>
+              )}
+            </div>
+          </div>
+          
+          <p style={{ marginTop: '15px', fontSize: '13px', color: '#6B7280', textAlign: 'center' }}>
+            Escanea este código para acceder a información detallada
+          </p>
+        </div>
+      )}
+      
       {/* Información adicional para productos */}
       {item.type === 'producto' && productInfo && (
         <div style={{
           borderTop: '1px solid #E5E7EB',
           paddingTop: '12px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '12px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+          gap: '10px',
           fontSize: '13px',
         }}>
           {/* Código QR */}
           {hasQRCode && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              backgroundColor: '#EEF2FF',
-              padding: '6px 10px',
-              borderRadius: '4px',
-              color: '#4F46E5',
-            }}>
-              <QrCodeIcon style={{ width: '16px', height: '16px' }} />
-              <span>QR disponible</span>
+            <div 
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: '#EEF2FF',
+                padding: '9px 12px',
+                borderRadius: '6px',
+                color: '#4F46E5',
+                cursor: 'pointer',
+                height: '40px',
+              }}
+              onClick={handleQRClick}
+              title="Ver código QR"
+            >
+              <QrCodeIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
+              <span>{showQR ? 'Ocultar QR' : 'QR disponible'}</span>
             </div>
           )}
           
@@ -542,13 +621,14 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#FEF3C7',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#D97706',
+            height: '40px',
           }}>
-            <CurrencyDollarIcon style={{ width: '16px', height: '16px' }} />
+            <CurrencyDollarIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
             <span>Precio: {formatPrice(productInfo.precio_venta)}</span>
           </div>
           
@@ -556,13 +636,14 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#EFF6FF',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#3B82F6',
+            height: '40px',
           }}>
-            <TagIcon style={{ width: '16px', height: '16px' }} />
+            <TagIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
             <span>{productInfo.categoria}</span>
           </div>
           
@@ -570,13 +651,14 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#F0FDF4',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#10B981',
+            height: '40px',
           }}>
-            <ClockIcon style={{ width: '16px', height: '16px' }} />
+            <ClockIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
             <span>Tiempo: {productInfo.tiempo_fabricacion}</span>
           </div>
           
@@ -584,13 +666,14 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#FEFCE8',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#CA8A04',
+            height: '40px',
           }}>
-            <ChartBarIcon style={{ width: '16px', height: '16px' }} />
+            <ChartBarIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
             <span>Popularidad: {productInfo.popularidad}/10</span>
           </div>
           
@@ -598,11 +681,12 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#EDE9FE',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#8B5CF6',
+            height: '40px',
           }}>
             <span>Margen: {productInfo.margen_ganancia}</span>
           </div>
@@ -611,11 +695,12 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#FCE7F3',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#DB2777',
+            height: '40px',
           }}>
             <span>Temporada: {productInfo.temporada}</span>
           </div>
@@ -625,13 +710,14 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '4px',
+              gap: '6px',
               backgroundColor: '#F3F4F6',
-              padding: '6px 10px',
-              borderRadius: '4px',
+              padding: '9px 12px',
+              borderRadius: '6px',
               color: '#4B5563',
+              height: '40px',
             }}>
-              <SwatchIcon style={{ width: '16px', height: '16px' }} />
+              <SwatchIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
               <span>Tallas: {productInfo.tallas_disponibles.join(', ')}</span>
             </div>
           )}
@@ -640,11 +726,12 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#F3F4F6',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#4B5563',
+            height: '40px',
           }}>
             <span>Última venta: {productInfo?.ultima_venta}</span>
           </div>
@@ -656,24 +743,30 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
         <div style={{
           borderTop: '1px solid #E5E7EB',
           paddingTop: '12px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '12px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+          gap: '10px',
           fontSize: '13px',
         }}>
           {/* Código QR */}
           {hasQRCode && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              backgroundColor: '#EEF2FF',
-              padding: '6px 10px',
-              borderRadius: '4px',
-              color: '#4F46E5',
-            }}>
-              <QrCodeIcon style={{ width: '16px', height: '16px' }} />
-              <span>QR disponible</span>
+            <div 
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: '#EEF2FF',
+                padding: '9px 12px',
+                borderRadius: '6px',
+                color: '#4F46E5',
+                cursor: 'pointer',
+                height: '40px',
+              }}
+              onClick={handleQRClick}
+              title="Ver código QR"
+            >
+              <QrCodeIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
+              <span>{showQR ? 'Ocultar QR' : 'QR disponible'}</span>
             </div>
           )}
           
@@ -681,13 +774,14 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#F0FDF4',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#10B981',
+            height: '40px',
           }}>
-            <ShoppingBagIcon style={{ width: '16px', height: '16px' }} />
+            <ShoppingBagIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
             <span>Proveedor: {materialInfo.proveedor}</span>
           </div>
           
@@ -695,13 +789,14 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#FEF3C7',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#D97706',
+            height: '40px',
           }}>
-            <CurrencyDollarIcon style={{ width: '16px', height: '16px' }} />
+            <CurrencyDollarIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
             <span>Precio: {materialInfo.precio_unitario}</span>
           </div>
           
@@ -709,13 +804,14 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#EDE9FE',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#8B5CF6',
+            height: '40px',
           }}>
-            <TagIcon style={{ width: '16px', height: '16px' }} />
+            <TagIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
             <span>Calidad: {materialInfo.calidad}</span>
           </div>
           
@@ -723,13 +819,14 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#EFF6FF',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#3B82F6',
+            height: '40px',
           }}>
-            <SwatchIcon style={{ width: '16px', height: '16px' }} />
+            <SwatchIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
             <span>Color: {materialInfo.color}</span>
           </div>
           
@@ -737,13 +834,14 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#F3F4F6',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#4B5563',
+            height: '40px',
           }}>
-            <ScaleIcon style={{ width: '16px', height: '16px' }} />
+            <ScaleIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
             <span>Medidas: {materialInfo.medidas}</span>
           </div>
           
@@ -751,13 +849,14 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#FCE7F3',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#DB2777',
+            height: '40px',
           }}>
-            <ClockIcon style={{ width: '16px', height: '16px' }} />
+            <ClockIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
             <span>Entrega: {materialInfo.tiempo_entrega}</span>
           </div>
           
@@ -765,13 +864,14 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#FEFCE8',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#CA8A04',
+            height: '40px',
           }}>
-            <CalendarIcon style={{ width: '16px', height: '16px' }} />
+            <CalendarIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
             <span>Última compra: {materialInfo.ultima_compra}</span>
           </div>
         </div>
@@ -782,24 +882,30 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
         <div style={{
           borderTop: '1px solid #E5E7EB',
           paddingTop: '12px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '12px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+          gap: '10px',
           fontSize: '13px',
         }}>
           {/* Código QR */}
           {hasQRCode && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              backgroundColor: '#EEF2FF',
-              padding: '6px 10px',
-              borderRadius: '4px',
-              color: '#4F46E5',
-            }}>
-              <QrCodeIcon style={{ width: '16px', height: '16px' }} />
-              <span>QR disponible</span>
+            <div 
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: '#EEF2FF',
+                padding: '9px 12px',
+                borderRadius: '6px',
+                color: '#4F46E5',
+                cursor: 'pointer',
+                height: '40px',
+              }}
+              onClick={handleQRClick}
+              title="Ver código QR"
+            >
+              <QrCodeIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
+              <span>{showQR ? 'Ocultar QR' : 'QR disponible'}</span>
             </div>
           )}
           
@@ -807,13 +913,14 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#EFF6FF',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#3B82F6',
+            height: '40px',
           }}>
-            <TagIcon style={{ width: '16px', height: '16px' }} />
+            <TagIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
             <span>{herramientaInfo.marca} {herramientaInfo.modelo}</span>
           </div>
           
@@ -821,13 +928,14 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#F0FDF4',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#10B981',
+            height: '40px',
           }}>
-            <CubeIcon style={{ width: '16px', height: '16px' }} />
+            <CubeIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
             <span>Ubicación: {herramientaInfo.ubicacion}</span>
           </div>
           
@@ -835,11 +943,12 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#EDE9FE',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#8B5CF6',
+            height: '40px',
           }}>
             <span>Garantía: {herramientaInfo.garantia}</span>
           </div>
@@ -848,13 +957,14 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#FEFCE8',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#CA8A04',
+            height: '40px',
           }}>
-            <CalendarIcon style={{ width: '16px', height: '16px' }} />
+            <CalendarIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
             <span>Adquirido: {herramientaInfo.fecha_adquisicion}</span>
           </div>
           
@@ -862,11 +972,12 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#FCE7F3',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#DB2777',
+            height: '40px',
           }}>
             <span>Último mant.: {herramientaInfo.fecha_ultimo_mantenimiento}</span>
           </div>
@@ -875,13 +986,14 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
             backgroundColor: '#FEF3C7',
-            padding: '6px 10px',
-            borderRadius: '4px',
+            padding: '9px 12px',
+            borderRadius: '6px',
             color: '#D97706',
+            height: '40px',
           }}>
-            <ClockIcon style={{ width: '16px', height: '16px' }} />
+            <ClockIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
             <span>Próx. revisión: {herramientaInfo.proxima_revision}</span>
           </div>
           
@@ -890,11 +1002,12 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '4px',
+              gap: '6px',
               backgroundColor: '#F3F4F6',
-              padding: '6px 10px',
-              borderRadius: '4px',
+              padding: '9px 12px',
+              borderRadius: '6px',
               color: '#4B5563',
+              height: '40px',
             }}>
               <span>Accesorios: {herramientaInfo.accesorios.join(', ')}</span>
             </div>

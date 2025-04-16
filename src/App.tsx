@@ -4,6 +4,8 @@ import Sidebar from './components/Sidebar'
 import TitleBar from './components/TitleBar'
 import Dashboard from './components/Dashboard'
 import Inventario from './pages/Inventario'
+import Clientes from './pages/Clientes'
+import Trabajadores from './pages/Trabajadores'
 
 function App() {
   const [activePage, setActivePage] = useState<string>('home');
@@ -20,6 +22,10 @@ function App() {
         return <Dashboard />;
       case 'inventory':
         return <Inventario />;
+      case 'clients':
+        return <Clientes />;
+      case 'employees':
+        return <Trabajadores />;
       default:
         return <div className="flex items-center justify-center h-full">
           <p className="text-xl text-gray-500">Página en desarrollo</p>

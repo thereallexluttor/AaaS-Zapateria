@@ -138,4 +138,46 @@ export type Producto = {
   imagen_url?: string;
   QR_Code?: string;
   created_at?: string;
+};
+
+export type Cliente = {
+  id?: string;
+  tipo_cliente?: string;
+  nombre?: string;
+  apellidos?: string;
+  nombre_compania?: string;
+  email?: string;
+  telefono?: string;
+  direccion?: string;
+  ciudad?: string;
+  codigo_postal?: string;
+  notas?: string;
+  fecha_registro?: string;
+  contacto_nombre?: string;
+  contacto_email?: string;
+  contacto_telefono?: string;
+  contacto_cargo?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type Trabajador = {
+  id?: string;
+  nombre: string;
+  apellido: string;
+  cedula: string;
+  fecha_contratacion?: string;
+  correo?: string;
+  telefono?: string;
+  direccion?: string;
+  salario?: number;
+  tipo: 'produccion' | 'administrativo' | 'diseno';
+  area?: 'corte' | 'aparado' | 'montaje' | 'suela' | 'acabado' | 'ventas' | 'administracion' | 'diseno';
+  especialidad?: string;
+  tipo_contrato?: 'completo' | 'parcial' | 'temporal' | 'practica';
+  horas_trabajo?: number;
+  fecha_nacimiento?: string;
+  imagen_url?: string;
+  created_at?: string;
+  updated_at?: string;
 }; 

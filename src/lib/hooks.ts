@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase, Material, Herramienta, Producto } from './supabase';
+import { supabase, Material, Herramienta, Producto, Cliente, Trabajador } from './supabase';
 import { InventoryItemType } from '../components/InventoryItem';
 import { v4 as uuidv4 } from 'uuid';
 import QRCode from 'qrcode';
@@ -1030,5 +1030,368 @@ export function useInventario() {
     refreshAllData,
     generateAndSaveQR,
     getItemById
+  };
+}
+
+// Hook para manejar los clientes
+export function useClientes() {
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Obtener clientes con búsqueda opcional
+  const getClientes = async (searchQuery = '') => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      let query = supabase
+        .from('clientes')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      // Si hay término de búsqueda, filtrar por campos relevantes
+      if (searchQuery) {
+        query = query.or(
+          `nombre.ilike.%${searchQuery}%,` + 
+          `apellidos.ilike.%${searchQuery}%,` +
+          `nombre_compania.ilike.%${searchQuery}%,` +
+          `email.ilike.%${searchQuery}%,` +
+          `telefono.ilike.%${searchQuery}%,` +
+          `contacto_nombre.ilike.%${searchQuery}%`
+        );
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('Error al obtener clientes:', error);
+        setError('Error al cargar clientes');
+        return;
+      }
+      
+      setClientes(data || []);
+    } catch (error) {
+      console.error('Error inesperado:', error);
+      setError('Error al cargar clientes');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Añadir un nuevo cliente
+  const addCliente = async (cliente: Omit<Cliente, 'id' | 'created_at' | 'updated_at'>) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Preparar objeto de cliente con valores por defecto
+      const newCliente = {
+        ...cliente,
+        // Asegurar que fechas sean correctas
+        fecha_registro: cliente.fecha_registro || new Date().toISOString().split('T')[0]
+      };
+      
+      console.log('Guardando cliente en la base de datos:', newCliente);
+      
+      const { data, error } = await supabase
+        .from('clientes')
+        .insert([newCliente])
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error al añadir cliente:', error);
+        setError('Error al guardar el cliente');
+        return null;
+      }
+      
+      console.log('Cliente guardado exitosamente:', data);
+      
+      // Actualizar estado local
+      setClientes(prev => [data, ...prev]);
+      
+      return data;
+    } catch (error) {
+      console.error('Error al añadir cliente:', error);
+      setError('Error al guardar el cliente');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Actualizar un cliente existente
+  const updateCliente = async (id: string, updates: Partial<Cliente>) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Asegurar que updated_at se actualice
+      const updatesWithTimestamp = {
+        ...updates,
+        updated_at: new Date().toISOString()
+      };
+      
+      const { data, error } = await supabase
+        .from('clientes')
+        .update(updatesWithTimestamp)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error al actualizar cliente:', error);
+        setError('Error al actualizar el cliente');
+        return null;
+      }
+      
+      // Actualizar estado local
+      setClientes(prev => 
+        prev.map(cliente => 
+          cliente.id === id ? { ...cliente, ...data } : cliente
+        )
+      );
+      
+      return data;
+    } catch (error) {
+      console.error('Error al actualizar cliente:', error);
+      setError('Error al actualizar el cliente');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Eliminar un cliente
+  const deleteCliente = async (id: string) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const { error } = await supabase
+        .from('clientes')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        console.error('Error al eliminar cliente:', error);
+        setError('Error al eliminar el cliente');
+        return false;
+      }
+      
+      // Actualizar estado local
+      setClientes(prev => prev.filter(cliente => cliente.id !== id));
+      
+      return true;
+    } catch (error) {
+      console.error('Error al eliminar cliente:', error);
+      setError('Error al eliminar el cliente');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Efecto para cargar los clientes al montar el componente
+  useEffect(() => {
+    getClientes();
+  }, []);
+  
+  return {
+    clientes,
+    loading,
+    error,
+    getClientes,
+    addCliente,
+    updateCliente,
+    deleteCliente,
+    setClientes
+  };
+}
+
+// Hook para manejar operaciones de trabajadores
+export function useTrabajadores() {
+  const [trabajadores, setTrabajadores] = useState<Trabajador[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Obtener trabajadores
+  const getTrabajadores = async (searchQuery = '') => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      let query = supabase
+        .from('trabajadores')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (searchQuery) {
+        query = query.or(`nombre.ilike.%${searchQuery}%,apellido.ilike.%${searchQuery}%,cedula.ilike.%${searchQuery}%`);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      setTrabajadores(data || []);
+    } catch (err) {
+      console.error('Error al obtener trabajadores:', err);
+      setError(err instanceof Error ? err.message : 'Error al obtener trabajadores');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Agregar trabajador
+  const addTrabajador = async (trabajador: Omit<Trabajador, 'id' | 'created_at' | 'updated_at'>) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Validar campos requeridos según el esquema
+      if (!trabajador.nombre || !trabajador.apellido || !trabajador.cedula || 
+          !trabajador.fecha_contratacion || !trabajador.correo || 
+          !trabajador.tipo || !trabajador.area || !trabajador.tipo_contrato) {
+        throw new Error('Faltan campos requeridos');
+      }
+
+      // Validar el tipo y área según los valores permitidos
+      if (!['produccion', 'administrativo', 'diseno'].includes(trabajador.tipo)) {
+        throw new Error('Tipo de trabajador no válido');
+      }
+
+      if (!['corte', 'aparado', 'montaje', 'suela', 'acabado', 'ventas', 'administracion', 'diseno']
+          .includes(trabajador.area)) {
+        throw new Error('Área no válida');
+      }
+
+      if (!['completo', 'parcial', 'temporal', 'practica'].includes(trabajador.tipo_contrato)) {
+        throw new Error('Tipo de contrato no válido');
+      }
+
+      // Validar salario y horas de trabajo
+      if (trabajador.salario !== undefined && trabajador.salario < 0) {
+        throw new Error('El salario no puede ser negativo');
+      }
+
+      if (trabajador.horas_trabajo !== undefined && 
+          (trabajador.horas_trabajo < 0 || trabajador.horas_trabajo > 168)) {
+        throw new Error('Las horas de trabajo deben estar entre 0 y 168');
+      }
+
+      const { data, error } = await supabase
+        .from('trabajadores')
+        .insert([{
+          ...trabajador,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setTrabajadores(prev => [data, ...prev]);
+      return data;
+    } catch (err) {
+      console.error('Error al agregar trabajador:', err);
+      setError(err instanceof Error ? err.message : 'Error al agregar trabajador');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Actualizar trabajador
+  const updateTrabajador = async (id: string, changes: Partial<Trabajador>) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Validaciones similares a addTrabajador para los campos que se están actualizando
+      if (changes.tipo && !['produccion', 'administrativo', 'diseno'].includes(changes.tipo)) {
+        throw new Error('Tipo de trabajador no válido');
+      }
+
+      if (changes.area && !['corte', 'aparado', 'montaje', 'suela', 'acabado', 'ventas', 'administracion', 'diseno']
+          .includes(changes.area)) {
+        throw new Error('Área no válida');
+      }
+
+      if (changes.tipo_contrato && !['completo', 'parcial', 'temporal', 'practica']
+          .includes(changes.tipo_contrato)) {
+        throw new Error('Tipo de contrato no válido');
+      }
+
+      if (changes.salario !== undefined && changes.salario < 0) {
+        throw new Error('El salario no puede ser negativo');
+      }
+
+      if (changes.horas_trabajo !== undefined && 
+          (changes.horas_trabajo < 0 || changes.horas_trabajo > 168)) {
+        throw new Error('Las horas de trabajo deben estar entre 0 y 168');
+      }
+
+      const { data, error } = await supabase
+        .from('trabajadores')
+        .update({
+          ...changes,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setTrabajadores(prev => prev.map(t => t.id === id ? data : t));
+      return data;
+    } catch (err) {
+      console.error('Error al actualizar trabajador:', err);
+      setError(err instanceof Error ? err.message : 'Error al actualizar trabajador');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Eliminar trabajador
+  const deleteTrabajador = async (id: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { error } = await supabase
+        .from('trabajadores')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setTrabajadores(prev => prev.filter(t => t.id !== id));
+    } catch (err) {
+      console.error('Error al eliminar trabajador:', err);
+      setError(err instanceof Error ? err.message : 'Error al eliminar trabajador');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Cargar trabajadores al montar el componente
+  useEffect(() => {
+    getTrabajadores();
+  }, []);
+
+  return {
+    trabajadores,
+    loading,
+    error,
+    getTrabajadores,
+    addTrabajador,
+    updateTrabajador,
+    deleteTrabajador
   };
 } 
