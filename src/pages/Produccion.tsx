@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { PlusCircleIcon, ArrowDownTrayIcon, PrinterIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { PlusCircleIcon, ArrowDownTrayIcon, PrinterIcon, MagnifyingGlassIcon, DocumentTextIcon, PhotoIcon, TableCellsIcon } from '@heroicons/react/24/outline';
+import PedidoForm from '../components/PedidoForm';
 
 interface Pedido {
   id: string;
@@ -460,59 +461,11 @@ function Produccion() {
             transition: 'opacity 0.3s ease-in-out',
           }}
         >
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '8px',
-            padding: '24px',
-            width: '100%',
-            maxWidth: '640px',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-            animation: 'modalAppear 0.3s forwards',
-          }}>
-            <h2 style={{ 
-              fontSize: '18px', 
-              fontWeight: 600, 
-              marginBottom: '16px' 
-            }}>
-              {currentPedido ? 'Editar Pedido' : 'Nuevo Pedido'}
-            </h2>
-            <p style={{ 
-              fontSize: '14px', 
-              color: '#6B7280', 
-              marginBottom: '16px' 
-            }}>
-              Esta funcionalidad está en desarrollo. Pronto podrás {currentPedido ? 'editar' : 'crear'} pedidos.
-            </p>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              marginTop: '24px'
-            }}>
-              <button
-                onClick={closeModal}
-                style={{
-                  backgroundColor: '#E5E7EB',
-                  color: '#374151',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '8px 16px',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#D1D5DB';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#E5E7EB';
-                }}
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
+          <PedidoForm 
+            onClose={closeModal} 
+            isEditing={!!currentPedido} 
+            initialData={currentPedido} 
+          />
         </div>
       )}
       
