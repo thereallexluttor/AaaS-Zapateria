@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { DocumentTextIcon, PhotoIcon, TableCellsIcon } from '@heroicons/react/24/outline';
+import { DocumentTextIcon, PhotoIcon, TableCellsIcon, ClockIcon, WrenchIcon } from '@heroicons/react/24/outline';
 import ProductSelector from './ProductSelector';
 import { supabase } from '../lib/supabase';
 import { ProductoSeleccionado, PedidoFormData, Cliente } from '../lib/types';
@@ -9,6 +9,85 @@ interface PedidoFormProps {
   isEditing?: boolean;
   initialData?: any;
   isClosing?: boolean;
+}
+
+interface PasoProduccion {
+  id: number;
+  producto_id: number;
+  herramienta_id: number;
+  descripcion: string;
+  tiempo_estimado: string;
+  orden: number;
+  herramienta: {
+    nombre: string;
+  };
+}
+
+// Función para parsear intervalos de PostgreSQL
+function parsePostgresInterval(interval: string): number {
+  if (!interval) return 0;
+
+  // PostgreSQL INTERVAL puede venir en varios formatos:
+  // "1 day" -> P1D
+  // "01:02:03" -> PT1H2M3S
+  // "1 day 01:02:03" -> P1DT1H2M3S
+  // "1 mon" -> P1M
+  // "1 year" -> P1Y
+  
+  let totalMinutes = 0;
+  
+  // Si el intervalo incluye días/meses/años
+  const dayMatch = interval.match(/(\d+) days?/);
+  const monthMatch = interval.match(/(\d+) mons?/);
+  const yearMatch = interval.match(/(\d+) years?/);
+  
+  if (dayMatch) totalMinutes += parseInt(dayMatch[1]) * 24 * 60;
+  if (monthMatch) totalMinutes += parseInt(monthMatch[1]) * 30 * 24 * 60; // Aproximado
+  if (yearMatch) totalMinutes += parseInt(yearMatch[1]) * 365 * 24 * 60; // Aproximado
+  
+  // Buscar el componente de tiempo HH:MM:SS
+  const timeMatch = interval.match(/(\d{2}):(\d{2}):(\d{2})/);
+  if (timeMatch) {
+    const [_, hours, minutes, seconds] = timeMatch;
+    totalMinutes += parseInt(hours) * 60;
+    totalMinutes += parseInt(minutes);
+    totalMinutes += Math.round(parseInt(seconds) / 60);
+  }
+  
+  return totalMinutes;
+}
+
+// Función para formatear minutos en un formato legible
+function formatTotalTime(totalMinutes: number): string {
+  if (totalMinutes === 0) return '0 minutos';
+
+  const days = Math.floor(totalMinutes / (24 * 60));
+  totalMinutes %= (24 * 60);
+  
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  const parts = [];
+  
+  if (days > 0) parts.push(`${days} ${days === 1 ? 'día' : 'días'}`);
+  if (hours > 0) parts.push(`${hours} ${hours === 1 ? 'hora' : 'horas'}`);
+  if (minutes > 0) parts.push(`${minutes} ${minutes === 1 ? 'minuto' : 'minutos'}`);
+
+  return parts.join(', ');
+}
+
+// Función para calcular el tiempo total de un producto
+function calculateProductTime(pasos: PasoProduccion[]): number {
+  return pasos.reduce((total, paso) => {
+    const minutosDelPaso = parsePostgresInterval(paso.tiempo_estimado);
+    return total + minutosDelPaso;
+  }, 0);
+}
+
+// Función para formatear un intervalo para mostrar en la UI
+function formatInterval(interval: string): string {
+  const minutes = parsePostgresInterval(interval);
+  return formatTotalTime(minutes);
 }
 
 function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing = false }: PedidoFormProps) {
@@ -33,6 +112,9 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
     observaciones: '',
     productos: []
   });
+  
+  const [pasosProduccion, setPasosProduccion] = useState<{ [key: number]: PasoProduccion[] }>({});
+  const [loadingPasos, setLoadingPasos] = useState<{ [key: number]: boolean }>({});
   
   // Cargar datos iniciales si estamos editando
   useEffect(() => {
@@ -72,6 +154,32 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
       fetchClientes();
     }
   }, [showManualForm]);
+
+  // Función para cargar los pasos de producción de un producto
+  const fetchPasosProduccion = async (productoId: number) => {
+    if (pasosProduccion[productoId] || loadingPasos[productoId]) return;
+
+    setLoadingPasos(prev => ({ ...prev, [productoId]: true }));
+    try {
+      const { data, error } = await supabase
+        .from('pasos_produccion')
+        .select(`
+          *,
+          herramienta:herramienta_id (
+            nombre
+          )
+        `)
+        .eq('producto_id', productoId)
+        .order('orden');
+
+      if (error) throw error;
+      setPasosProduccion(prev => ({ ...prev, [productoId]: data || [] }));
+    } catch (error) {
+      console.error('Error al cargar pasos de producción:', error);
+    } finally {
+      setLoadingPasos(prev => ({ ...prev, [productoId]: false }));
+    }
+  };
 
   // Función para manejar la selección de archivos
   const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'pdf' | 'excel') => {
@@ -133,6 +241,7 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
       ...prev,
       productos: [...prev.productos, producto]
     }));
+    fetchPasosProduccion(producto.id);
   };
   
   // Manejar la eliminación de un producto
@@ -942,82 +1051,165 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
                             {producto.nombre}
                           </h5>
 
+                          {/* Pasos de producción */}
                           <div style={{ 
-                            display: 'flex', 
-                            flexWrap: 'wrap', 
-                            gap: '16px',
-                            fontSize: '14px',
-                            color: '#4B5563'
+                            marginTop: '12px',
+                            padding: '12px',
+                            backgroundColor: '#F8FAFC',
+                            borderRadius: '6px',
+                            border: '1px solid #E2E8F0'
                           }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-                                <line x1="3" y1="6" x2="21" y2="6"></line>
-                                <path d="M16 10a4 4 0 0 1-8 0"></path>
-                              </svg>
-                              <span>Cantidad: <strong>{producto.cantidad}</strong></span>
-                            </div>
-
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <line x1="12" y1="1" x2="12" y2="23"></line>
-                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                              </svg>
-                              <span>Precio: <strong>${producto.precio.toFixed(2)}</strong></span>
-                            </div>
-                          </div>
-
-                          <div style={{ 
-                            display: 'flex', 
-                            gap: '12px', 
-                            marginTop: '4px'
-                          }}>
-                            {producto.tallasSeleccionadas.map((talla, i) => (
-                              <span 
-                                key={i}
-                                style={{
-                                  padding: '4px 8px',
-                                  backgroundColor: '#EEF2FF',
-                                  color: '#4F46E5',
-                                  borderRadius: '4px',
-                                  fontSize: '13px',
-                                  fontWeight: 500,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '4px'
-                                }}
-                              >
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
-                                  <line x1="7" y1="7" x2="7.01" y2="7"></line>
-                                </svg>
-                                {talla}
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              marginBottom: '8px'
+                            }}>
+                              <ClockIcon style={{ width: '16px', height: '16px', color: '#64748B' }} />
+                              <span style={{ fontSize: '14px', fontWeight: 500, color: '#64748B' }}>
+                                Proceso de producción
                               </span>
-                            ))}
+                            </div>
 
-                            {producto.coloresSeleccionados.map((color, i) => (
-                              <span 
-                                key={i}
-                                style={{
-                                  padding: '4px 8px',
+                            {loadingPasos[producto.id] ? (
+                              <div style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '8px',
+                                color: '#64748B',
+                                fontSize: '13px',
+                                padding: '8px'
+                              }}>
+                                <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeLinecap="round" />
+                                </svg>
+                                Cargando pasos de producción...
+                              </div>
+                            ) : pasosProduccion[producto.id]?.length > 0 ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {pasosProduccion[producto.id].map((paso, idx) => (
+                                  <div 
+                                    key={paso.id}
+                                    style={{
+                                      display: 'flex',
+                                      gap: '12px',
+                                      padding: '8px',
+                                      backgroundColor: 'white',
+                                      borderRadius: '4px',
+                                      border: '1px solid #E2E8F0'
+                                    }}
+                                  >
+                                    <div style={{
+                                      width: '24px',
+                                      height: '24px',
+                                      backgroundColor: '#EEF2FF',
+                                      color: '#4F46E5',
+                                      borderRadius: '50%',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '12px',
+                                      fontWeight: 600
+                                    }}>
+                                      {paso.orden}
+                                    </div>
+                                    
+                                    <div style={{ flex: 1 }}>
+                                      <div style={{ 
+                                        fontSize: '14px', 
+                                        color: '#1F2937',
+                                        marginBottom: '4px'
+                                      }}>
+                                        {paso.descripcion}
+                                      </div>
+                                      
+                                      <div style={{ 
+                                        display: 'flex', 
+                                        gap: '12px',
+                                        fontSize: '12px',
+                                        color: '#64748B'
+                                      }}>
+                                        <div style={{ 
+                                          display: 'flex', 
+                                          alignItems: 'center', 
+                                          gap: '4px' 
+                                        }}>
+                                          <ClockIcon style={{ width: '14px', height: '14px' }} />
+                                          {formatInterval(paso.tiempo_estimado)}
+                                        </div>
+                                        
+                                        <div style={{ 
+                                          display: 'flex', 
+                                          alignItems: 'center', 
+                                          gap: '4px'
+                                        }}>
+                                          <WrenchIcon style={{ width: '14px', height: '14px' }} />
+                                          {paso.herramienta?.nombre || 'Herramienta no especificada'}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                                
+                                {/* Tiempo por producto y total */}
+                                <div style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '8px',
+                                  padding: '12px',
                                   backgroundColor: '#F0FDF4',
-                                  color: '#15803D',
-                                  borderRadius: '4px',
+                                  borderRadius: '6px',
+                                  color: '#166534',
                                   fontSize: '13px',
-                                  fontWeight: 500,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '4px'
-                                }}
-                              >
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <circle cx="12" cy="12" r="10"></circle>
-                                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                                </svg>
-                                {color}
-                              </span>
-                            ))}
+                                  marginTop: '8px'
+                                }}>
+                                  <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    paddingBottom: '8px',
+                                    borderBottom: '1px dashed #BBF7D0'
+                                  }}>
+                                    <ClockIcon style={{ width: '16px', height: '16px' }} />
+                                    <div>
+                                      <span style={{ fontWeight: 500 }}>Tiempo por unidad:</span>
+                                      <div style={{ marginTop: '2px', color: '#15803D' }}>
+                                        {formatTotalTime(calculateProductTime(pasosProduccion[producto.id]))}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {producto.cantidad > 1 && (
+                                    <div style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '8px'
+                                    }}>
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M17 2H7a5 5 0 0 0-5 5v10a5 5 0 0 0 5 5h10a5 5 0 0 0 5-5V7a5 5 0 0 0-5-5z"></path>
+                                        <line x1="12" y1="6" x2="12" y2="18"></line>
+                                        <line x1="6" y1="12" x2="18" y2="12"></line>
+                                      </svg>
+                                      <div>
+                                        <span style={{ fontWeight: 500 }}>Tiempo total para {producto.cantidad} unidades:</span>
+                                        <div style={{ marginTop: '2px', color: '#15803D' }}>
+                                          {formatTotalTime(calculateProductTime(pasosProduccion[producto.id]) * producto.cantidad)}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div style={{
+                                padding: '8px',
+                                color: '#64748B',
+                                fontSize: '13px',
+                                fontStyle: 'italic'
+                              }}>
+                                No hay pasos de producción definidos para este producto.
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -1211,6 +1403,94 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
           </button>
         )}
       </div>
+
+      {/* Agregar el tiempo total del pedido al final del formulario */}
+      {formData.productos.length > 0 && (
+        <div style={{
+          marginTop: '24px',
+          padding: '16px',
+          backgroundColor: '#EEF2FF',
+          borderRadius: '8px',
+          border: '1px solid #E0E7FF'
+        }}>
+          <h4 style={{
+            fontSize: '15px',
+            fontWeight: 600,
+            color: '#4F46E5',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <ClockIcon style={{ width: '18px', height: '18px' }} />
+            Tiempo total estimado del pedido
+          </h4>
+
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px'
+          }}>
+            {formData.productos.map((prod, idx) => (
+              pasosProduccion[prod.id] && (
+                <div key={idx} style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 12px',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '6px',
+                  fontSize: '13px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{
+                      width: '24px',
+                      height: '24px',
+                      backgroundColor: '#EEF2FF',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      color: '#4F46E5'
+                    }}>
+                      {idx + 1}
+                    </span>
+                    <span>{prod.nombre} ({prod.cantidad} unidades)</span>
+                  </div>
+                  <span style={{ color: '#4F46E5', fontWeight: 500 }}>
+                    {formatTotalTime(calculateProductTime(pasosProduccion[prod.id]) * prod.cantidad)}
+                  </span>
+                </div>
+              )
+            ))}
+
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginTop: '8px',
+              paddingTop: '12px',
+              borderTop: '1px dashed #C7D2FE',
+              fontSize: '14px',
+              fontWeight: 600,
+              color: '#4F46E5'
+            }}>
+              <span>Tiempo total del pedido:</span>
+              <span>
+                {formatTotalTime(
+                  formData.productos.reduce((total, prod) => {
+                    if (!pasosProduccion[prod.id]) return total;
+                    const tiempoPorProducto = calculateProductTime(pasosProduccion[prod.id]);
+                    return total + (tiempoPorProducto * prod.cantidad);
+                  }, 0)
+                )}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
