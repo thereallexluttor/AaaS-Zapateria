@@ -35,6 +35,11 @@ export interface PedidoFormData {
   estado: 'pendiente' | 'en_proceso' | 'completado';
   observaciones: string;
   productos: ProductoSeleccionado[];
+  // Campos para ventas
+  trabajador_id?: number;
+  descuento?: number;
+  forma_pago?: 'Efectivo' | 'Tarjeta crédito' | 'Tarjeta débito' | 'Transferencia' | 'Crédito';
+  estado_venta?: 'Completada' | 'Pendiente' | 'Cancelada';
 }
 
 // Tipos para entidades de base de datos

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { DocumentTextIcon, PhotoIcon, TableCellsIcon, ClockIcon, WrenchIcon } from '@heroicons/react/24/outline';
+import { DocumentTextIcon, PhotoIcon, TableCellsIcon, ClockIcon, WrenchIcon, ListBulletIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import ProductSelector from './ProductSelector';
 import { supabase } from '../lib/supabase';
 import { ProductoSeleccionado, PedidoFormData, Cliente } from '../lib/types';
@@ -21,6 +21,12 @@ interface PasoProduccion {
   herramienta: {
     nombre: string;
   };
+}
+
+interface Trabajador {
+  id: number;
+  nombre: string;
+  apellido: string;
 }
 
 // Función para parsear intervalos de PostgreSQL
@@ -102,6 +108,10 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(false);
   
+  // Nuevo estado para trabajadores
+  const [trabajadores, setTrabajadores] = useState<Trabajador[]>([]);
+  const [loadingTrabajadores, setLoadingTrabajadores] = useState(false);
+  
   // Estado para el formulario manual
   const [showManualForm, setShowManualForm] = useState(false);
   const [formData, setFormData] = useState<PedidoFormData>({
@@ -110,12 +120,16 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
     fechaEntrega: '',
     estado: 'pendiente',
     observaciones: '',
-    productos: []
+    productos: [],
+    // Valores por defecto para los nuevos campos
+    trabajador_id: undefined,
+    descuento: 0,
+    forma_pago: 'Efectivo'
   });
   
   const [pasosProduccion, setPasosProduccion] = useState<{ [key: number]: PasoProduccion[] }>({});
   const [loadingPasos, setLoadingPasos] = useState<{ [key: number]: boolean }>({});
-  
+
   // Cargar datos iniciales si estamos editando
   useEffect(() => {
     if (isEditing && initialData) {
@@ -125,7 +139,10 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
         fechaEntrega: initialData.fechaEntrega || '',
         estado: initialData.estado || 'pendiente',
         observaciones: initialData.observaciones || '',
-        productos: initialData.productos || []
+        productos: initialData.productos || [],
+        trabajador_id: initialData.trabajador_id,
+        descuento: initialData.descuento || 0,
+        forma_pago: initialData.forma_pago || 'Efectivo'
       });
       setShowManualForm(true);
     }
@@ -152,6 +169,31 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
 
     if (showManualForm) {
       fetchClientes();
+    }
+  }, [showManualForm]);
+
+  // Cargar trabajadores desde Supabase
+  useEffect(() => {
+    async function fetchTrabajadores() {
+      setLoadingTrabajadores(true);
+      try {
+        const { data, error } = await supabase
+          .from('trabajadores')
+          .select('*')
+          .eq('area', 'ventas')  // Solo trabajadores del área de ventas
+          .order('nombre');
+        
+        if (error) throw error;
+        setTrabajadores(data || []);
+      } catch (error) {
+        console.error('Error al cargar trabajadores:', error);
+      } finally {
+        setLoadingTrabajadores(false);
+      }
+    }
+
+    if (showManualForm) {
+      fetchTrabajadores();
     }
   }, [showManualForm]);
 
@@ -268,7 +310,6 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
       return;
     }
     
-    // Aquí iría la lógica para guardar en Supabase
     try {
       // Crear un pedido en la tabla pedidos
       const { data: pedidoData, error: pedidoError } = await supabase
@@ -280,31 +321,54 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
           fecha_entrega: formData.fechaEntrega,
           estado: formData.estado,
           observaciones: formData.observaciones,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
         })
         .select('id')
         .single();
       
       if (pedidoError) throw pedidoError;
       
-      // Insertar los productos en la tabla detalle_pedidos
-      if (pedidoData.id) {
-        const detallesPedidos = formData.productos.map(producto => ({
-          pedido_id: pedidoData.id,
+      // Insertar en detalle_pedidos
+      const detallesPedidos = formData.productos.map(producto => ({
+        pedido_id: pedidoData.id,
+        producto_id: producto.id,
+        tallas: JSON.stringify(producto.tallasSeleccionadas),
+        colores: JSON.stringify(producto.coloresSeleccionados),
+        cantidad: producto.cantidad,
+        precio_unitario: producto.precio
+      }));
+      
+      const { error: detalleError } = await supabase
+        .from('detalle_pedidos')
+        .upsert(detallesPedidos);
+      
+      if (detalleError) throw detalleError;
+
+      // Insertar en ventas
+      const ventasData = formData.productos.map(producto => {
+        // Calculamos el precio total de la venta (precio * cantidad) con 2 decimales
+        const precio_venta_total_aux = Number((producto.precio).toFixed(2));
+        const precio_venta_total = Number((producto.cantidad * producto.precio).toFixed(2));
+        
+        // El descuento se calcula como porcentaje del precio total
+        const descuento_calculado = Number(((precio_venta_total * (formData.descuento || 0)) / 100).toFixed(2));
+
+        return {
           producto_id: producto.id,
-          tallas: JSON.stringify(producto.tallasSeleccionadas),
-          colores: JSON.stringify(producto.coloresSeleccionados),
+          cliente_id: formData.cliente,
+          trabajador_id: formData.trabajador_id,
           cantidad: producto.cantidad,
-          precio_unitario: producto.precio
-        }));
-        
-        const { error: detalleError } = await supabase
-          .from('detalle_pedidos')
-          .upsert(detallesPedidos);
-        
-        if (detalleError) throw detalleError;
-      }
+          precio_venta: precio_venta_total_aux,
+          descuento: descuento_calculado,
+          forma_pago: formData.forma_pago,
+          estado: 'Completada' // Valor por defecto
+        };
+      });
+
+      const { error: ventasError } = await supabase
+        .from('ventas')
+        .upsert(ventasData);
+
+      if (ventasError) throw ventasError;
       
       // Notificar éxito y cerrar modal
       alert(isEditing ? 'Pedido actualizado con éxito!' : 'Pedido creado con éxito!');
@@ -786,41 +850,6 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
                 )}
               </div>
 
-              {/* Estado - Solo mostrarlo en modo edición */}
-              {isEditing && (
-                <div>
-                  <label 
-                    htmlFor="estado"
-                    style={{
-                      display: 'block',
-                      marginBottom: '6px',
-                      fontSize: '14px',
-                      color: '#374151',
-                      fontWeight: 500
-                    }}
-                  >
-                    Estado
-                  </label>
-                  <select
-                    id="estado"
-                    name="estado"
-                    value={formData.estado}
-                    onChange={handleInputChange}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      border: '1px solid #E5E7EB',
-                      borderRadius: '6px',
-                      fontSize: '14px'
-                    }}
-                  >
-                    <option value="pendiente">Pendiente</option>
-                    <option value="en_proceso">En proceso</option>
-                    <option value="completado">Completado</option>
-                  </select>
-                </div>
-              )}
-
               {/* Fecha Inicio */}
               <div>
                 <label 
@@ -912,6 +941,176 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
                     resize: 'vertical'
                   }}
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Nueva sección para información de venta */}
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '12px',
+            border: '1px solid #E5E7EB',
+            padding: '24px',
+            marginTop: '24px'
+          }}>
+            <h3 style={{ 
+              fontSize: '16px', 
+              fontWeight: 600, 
+              color: '#111827', 
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <span style={{
+                backgroundColor: '#4F46E5',
+                color: 'white',
+                width: '24px',
+                height: '24px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '14px'
+              }}>3</span>
+              Información de Venta
+            </h3>
+
+            <div style={{ 
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+              gap: '20px'
+            }}>
+              {/* Trabajador */}
+              <div>
+                <label 
+                  htmlFor="trabajador_id"
+                  style={{
+                    display: 'block',
+                    marginBottom: '6px',
+                    fontSize: '14px',
+                    color: '#374151',
+                    fontWeight: 500
+                  }}
+                >
+                  Trabajador
+                </label>
+                <select
+                  id="trabajador_id"
+                  name="trabajador_id"
+                  value={formData.trabajador_id || ''}
+                  onChange={handleInputChange}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '6px',
+                    fontSize: '14px'
+                  }}
+                >
+                  <option value="">Seleccione un trabajador</option>
+                  {loadingTrabajadores ? (
+                    <option disabled>Cargando trabajadores...</option>
+                  ) : (
+                    trabajadores.map((trabajador) => (
+                      <option key={trabajador.id} value={trabajador.id}>
+                        {`${trabajador.nombre} ${trabajador.apellido}`}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              {/* Descuento */}
+              <div>
+                <label 
+                  htmlFor="descuento"
+                  style={{
+                    display: 'block',
+                    marginBottom: '6px',
+                    fontSize: '14px',
+                    color: '#374151',
+                    fontWeight: 500
+                  }}
+                >
+                  Descuento (%)
+                </label>
+                <div style={{ 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <input
+                    type="number"
+                    id="descuento"
+                    name="descuento"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={formData.descuento || 0}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value);
+                      if (value >= 0 && value <= 100) {
+                        handleInputChange(e);
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #E5E7EB',
+                      borderRadius: '6px',
+                      fontSize: '14px'
+                    }}
+                  />
+                  <span style={{ 
+                    color: '#6B7280',
+                    fontSize: '14px'
+                  }}>%</span>
+                </div>
+                <span style={{ 
+                  fontSize: '12px',
+                  color: '#6B7280',
+                  marginTop: '4px',
+                  display: 'block'
+                }}>
+                  Ingrese un valor entre 0 y 100
+                </span>
+              </div>
+
+              {/* Forma de Pago */}
+              <div>
+                <label 
+                  htmlFor="forma_pago"
+                  style={{
+                    display: 'block',
+                    marginBottom: '6px',
+                    fontSize: '14px',
+                    color: '#374151',
+                    fontWeight: 500
+                  }}
+                >
+                  Forma de Pago*
+                </label>
+                <select
+                  id="forma_pago"
+                  name="forma_pago"
+                  value={formData.forma_pago}
+                  onChange={handleInputChange}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '6px',
+                    fontSize: '14px'
+                  }}
+                >
+                  <option value="Efectivo">Efectivo</option>
+                  <option value="Tarjeta crédito">Tarjeta crédito</option>
+                  <option value="Tarjeta débito">Tarjeta débito</option>
+                  <option value="Transferencia">Transferencia</option>
+                  <option value="Crédito">Crédito</option>
+                </select>
               </div>
             </div>
           </div>
@@ -1042,14 +1241,57 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
 
                         {/* Información del producto */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <h5 style={{ 
-                            fontSize: '15px', 
-                            fontWeight: 600, 
-                            color: '#111827',
-                            margin: 0
-                          }}>
-                            {producto.nombre}
-                          </h5>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <h5 style={{ 
+                              fontSize: '15px', 
+                              fontWeight: 600, 
+                              color: '#111827',
+                              margin: 0
+                            }}>
+                              {producto.nombre}
+                            </h5>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <span 
+                                style={{
+                                  padding: '2px 6px',
+                                  backgroundColor: '#DBEAFE', // Light blue
+                                  color: '#1E40AF', // Dark blue
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  fontWeight: 500,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '3px'
+                                }}
+                              >
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                                  <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                                </svg>
+                                {producto.tallasSeleccionadas[0] || 'N/A'}
+                              </span>
+                              <span 
+                                style={{
+                                  padding: '2px 6px',
+                                  backgroundColor: '#FEF9C3', // Light yellow
+                                  color: '#854D0E', // Dark yellow/brown
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  fontWeight: 500,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '3px'
+                                }}
+                              >
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <circle cx="12" cy="12" r="10"></circle>
+                                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                </svg>
+                                {producto.coloresSeleccionados[0] || 'N/A'}
+                              </span>
+                            </div>
+                          </div>
 
                           {/* Pasos de producción */}
                           <div style={{ 
@@ -1102,8 +1344,8 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
                                     <div style={{
                                       width: '24px',
                                       height: '24px',
-                                      backgroundColor: '#EEF2FF',
-                                      color: '#4F46E5',
+                                      backgroundColor: '#E0E7FF',
+                                      color: '#4338CA',
                                       borderRadius: '50%',
                                       display: 'flex',
                                       alignItems: 'center',
@@ -1118,23 +1360,23 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
                                       <div style={{ 
                                         fontSize: '14px', 
                                         color: '#1F2937',
-                                        marginBottom: '4px'
+                                        marginBottom: '8px'
                                       }}>
                                         {paso.descripcion}
                                       </div>
                                       
                                       <div style={{ 
                                         display: 'flex', 
-                                        gap: '12px',
-                                        fontSize: '12px',
-                                        color: '#64748B'
+                                        gap: '16px',
+                                        fontSize: '13px',
+                                        color: '#4B5563'
                                       }}>
                                         <div style={{ 
                                           display: 'flex', 
                                           alignItems: 'center', 
                                           gap: '4px' 
                                         }}>
-                                          <ClockIcon style={{ width: '14px', height: '14px' }} />
+                                          <ClockIcon style={{ width: '15px', height: '15px', color: '#6B7280' }} />
                                           {formatInterval(paso.tiempo_estimado)}
                                         </div>
                                         
@@ -1143,7 +1385,7 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
                                           alignItems: 'center', 
                                           gap: '4px'
                                         }}>
-                                          <WrenchIcon style={{ width: '14px', height: '14px' }} />
+                                          <WrenchIcon style={{ width: '15px', height: '15px', color: '#6B7280' }} />
                                           {paso.herramienta?.nombre || 'Herramienta no especificada'}
                                         </div>
                                       </div>
@@ -1153,9 +1395,9 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
                                 
                                 {/* Tiempo por producto y total */}
                                 <div style={{
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  gap: '8px',
+                                  display: 'grid',
+                                  gridTemplateColumns: '1fr 1fr',
+                                  gap: '12px',
                                   padding: '12px',
                                   backgroundColor: '#F0FDF4',
                                   borderRadius: '6px',
@@ -1167,37 +1409,30 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
-                                    paddingBottom: '8px',
-                                    borderBottom: '1px dashed #BBF7D0'
+                                    paddingRight: '12px',
+                                    borderRight: '1px dashed #BBF7D0'
                                   }}>
-                                    <ClockIcon style={{ width: '16px', height: '16px' }} />
+                                    <ClockIcon style={{ width: '18px', height: '18px' }} />
                                     <div>
-                                      <span style={{ fontWeight: 500 }}>Tiempo por unidad:</span>
-                                      <div style={{ marginTop: '2px', color: '#15803D' }}>
+                                      <span style={{ fontWeight: 500 }}>Tiempo / unidad:</span>
+                                      <div style={{ marginTop: '2px', color: '#15803D', fontWeight: '500' }}>
                                         {formatTotalTime(calculateProductTime(pasosProduccion[producto.id]))}
                                       </div>
                                     </div>
                                   </div>
-
-                                  {producto.cantidad > 1 && (
-                                    <div style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '8px'
-                                    }}>
-                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M17 2H7a5 5 0 0 0-5 5v10a5 5 0 0 0 5 5h10a5 5 0 0 0 5-5V7a5 5 0 0 0-5-5z"></path>
-                                        <line x1="12" y1="6" x2="12" y2="18"></line>
-                                        <line x1="6" y1="12" x2="18" y2="12"></line>
-                                      </svg>
-                                      <div>
-                                        <span style={{ fontWeight: 500 }}>Tiempo total para {producto.cantidad} unidades:</span>
-                                        <div style={{ marginTop: '2px', color: '#15803D' }}>
-                                          {formatTotalTime(calculateProductTime(pasosProduccion[producto.id]) * producto.cantidad)}
-                                        </div>
+                                  <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
+                                  }}>
+                                    <ListBulletIcon style={{ width: '18px', height: '18px' }} />
+                                    <div>
+                                      <span style={{ fontWeight: 500 }}>Pasos / unidad:</span>
+                                      <div style={{ marginTop: '2px', color: '#15803D', fontWeight: '500' }}>
+                                        {pasosProduccion[producto.id].length} {pasosProduccion[producto.id].length === 1 ? 'paso' : 'pasos'}
                                       </div>
                                     </div>
-                                  )}
+                                  </div>
                                 </div>
                               </div>
                             ) : (
@@ -1316,6 +1551,178 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
         </form>
       )}
       
+      {/* Agregar el tiempo total del pedido al final del formulario */}
+      {formData.productos.length > 0 && (
+        <div style={{
+          marginTop: '24px',
+          padding: '20px',
+          backgroundColor: '#F3F4F6',
+          borderRadius: '12px',
+          border: '1px solid #E5E7EB'
+        }}>
+          <h4 style={{
+            fontSize: '16px',
+            fontWeight: 600,
+            color: '#111827',
+            marginBottom: '16px',
+            paddingBottom: '12px',
+            borderBottom: '1px solid #E5E7EB',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            Resumen total del pedido
+          </h4>
+
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            marginBottom: '16px'
+          }}>
+            {formData.productos.map((prod, idx) => (
+              pasosProduccion[prod.id] && (
+                <div key={idx} style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'auto 1fr auto',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '12px',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '8px',
+                  fontSize: '14px'
+                }}>
+                  <span style={{
+                    width: '28px',
+                    height: '28px',
+                    backgroundColor: '#E0E7FF',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: '#4338CA'
+                  }}>
+                    {idx + 1}
+                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontWeight: 500 }}>{prod.nombre}</span>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <span 
+                          style={{
+                            padding: '1px 5px',
+                            backgroundColor: '#DBEAFE',
+                            color: '#1E40AF',
+                            borderRadius: '4px',
+                            fontSize: '10px',
+                            fontWeight: 500,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '2px'
+                          }}
+                        >
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                            <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                          </svg>
+                          {prod.tallasSeleccionadas[0] || 'N/A'}
+                        </span>
+                        <span 
+                          style={{
+                            padding: '1px 5px',
+                            backgroundColor: '#FEF9C3',
+                            color: '#854D0E',
+                            borderRadius: '4px',
+                            fontSize: '10px',
+                            fontWeight: 500,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '2px'
+                          }}
+                        >
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                          </svg>
+                          {prod.coloresSeleccionados[0] || 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: '12px', color: '#6B7280' }}>{prod.cantidad} {prod.cantidad === 1 ? 'unidad' : 'unidades'}</span>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ color: '#1F2937', fontWeight: 500 }}>
+                      {formatTotalTime(calculateProductTime(pasosProduccion[prod.id]) * prod.cantidad)}
+                    </span>
+                    <span style={{ fontSize: '12px', color: '#6B7280', marginLeft: '4px' }}>
+                      ({pasosProduccion[prod.id].length * prod.cantidad} pasos)
+                    </span>
+                  </div>
+                </div>
+              )
+            ))}
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '12px',
+            marginTop: '16px',
+            padding: '16px',
+            borderTop: '1px solid #E5E7EB',
+            backgroundColor: '#FFFFFF',
+            borderRadius: '8px'
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              paddingRight: '12px',
+              borderRight: '1px solid #E5E7EB'
+            }}>
+              <ClockIcon style={{ width: '18px', height: '18px', color: '#4B5563' }} />
+              <div>
+                <span style={{ fontSize: '14px', color: '#4B5563' }}>Tiempo total:</span>
+                <div style={{ fontSize: '15px', fontWeight: 600, color: '#111827', marginTop: '2px' }}>
+                  {formatTotalTime(
+                    formData.productos.reduce((total, prod) => {
+                      if (!pasosProduccion[prod.id]) return total;
+                      const tiempoPorProducto = calculateProductTime(pasosProduccion[prod.id]);
+                      return total + (tiempoPorProducto * prod.cantidad);
+                    }, 0)
+                  )}
+                </div>
+              </div>
+            </div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <ListBulletIcon style={{ width: '18px', height: '18px', color: '#4B5563' }} />
+              <div>
+                <span style={{ fontSize: '14px', color: '#4B5563' }}>Pasos totales:</span>
+                <div style={{ fontSize: '15px', fontWeight: 600, color: '#111827', marginTop: '2px' }}>
+                  {formData.productos.reduce((total, prod) => {
+                    if (!pasosProduccion[prod.id]) return total;
+                    return total + (pasosProduccion[prod.id].length * prod.cantidad);
+                  }, 0)} pasos
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Botones de acción */}
       <div style={{
         display: 'flex',
@@ -1403,94 +1810,6 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
           </button>
         )}
       </div>
-
-      {/* Agregar el tiempo total del pedido al final del formulario */}
-      {formData.productos.length > 0 && (
-        <div style={{
-          marginTop: '24px',
-          padding: '16px',
-          backgroundColor: '#EEF2FF',
-          borderRadius: '8px',
-          border: '1px solid #E0E7FF'
-        }}>
-          <h4 style={{
-            fontSize: '15px',
-            fontWeight: 600,
-            color: '#4F46E5',
-            marginBottom: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <ClockIcon style={{ width: '18px', height: '18px' }} />
-            Tiempo total estimado del pedido
-          </h4>
-
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px'
-          }}>
-            {formData.productos.map((prod, idx) => (
-              pasosProduccion[prod.id] && (
-                <div key={idx} style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '8px 12px',
-                  backgroundColor: '#FFFFFF',
-                  borderRadius: '6px',
-                  fontSize: '13px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{
-                      width: '24px',
-                      height: '24px',
-                      backgroundColor: '#EEF2FF',
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '12px',
-                      fontWeight: 500,
-                      color: '#4F46E5'
-                    }}>
-                      {idx + 1}
-                    </span>
-                    <span>{prod.nombre} ({prod.cantidad} unidades)</span>
-                  </div>
-                  <span style={{ color: '#4F46E5', fontWeight: 500 }}>
-                    {formatTotalTime(calculateProductTime(pasosProduccion[prod.id]) * prod.cantidad)}
-                  </span>
-                </div>
-              )
-            ))}
-
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginTop: '8px',
-              paddingTop: '12px',
-              borderTop: '1px dashed #C7D2FE',
-              fontSize: '14px',
-              fontWeight: 600,
-              color: '#4F46E5'
-            }}>
-              <span>Tiempo total del pedido:</span>
-              <span>
-                {formatTotalTime(
-                  formData.productos.reduce((total, prod) => {
-                    if (!pasosProduccion[prod.id]) return total;
-                    const tiempoPorProducto = calculateProductTime(pasosProduccion[prod.id]);
-                    return total + (tiempoPorProducto * prod.cantidad);
-                  }, 0)
-                )}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
