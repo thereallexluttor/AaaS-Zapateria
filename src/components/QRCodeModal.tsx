@@ -4,7 +4,7 @@ import { ArrowLeftIcon, PrinterIcon, ArrowDownTrayIcon, XMarkIcon, QrCodeIcon } 
 interface QRCodeModalProps {
   qrUrl: string;
   itemName: string;
-  itemType: 'producto' | 'herramienta' | 'material';
+  itemType: 'producto' | 'herramienta' | 'material' | 'paso_produccion';
   itemId: string;
   onClose: () => void;
   isClosing: boolean;
@@ -101,6 +101,7 @@ function QRCodeModal({ qrUrl, itemName, itemType, itemId, onClose, isClosing }: 
       case 'producto': return 'Producto';
       case 'herramienta': return 'Herramienta';
       case 'material': return 'Material';
+      case 'paso_produccion': return 'Paso de Producción';
       default: return type;
     }
   };

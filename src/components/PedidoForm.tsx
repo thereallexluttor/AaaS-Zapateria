@@ -3,6 +3,7 @@ import { DocumentTextIcon, PhotoIcon, TableCellsIcon, ClockIcon, WrenchIcon, Lis
 import ProductSelector from './ProductSelector';
 import { supabase } from '../lib/supabase';
 import { ProductoSeleccionado, PedidoFormData, Cliente } from '../lib/types';
+import PasosProduccionCards from './PasosProduccionCards';
 
 interface PedidoFormProps {
   onClose: () => void;
@@ -129,6 +130,11 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
   
   const [pasosProduccion, setPasosProduccion] = useState<{ [key: number]: PasoProduccion[] }>({});
   const [loadingPasos, setLoadingPasos] = useState<{ [key: number]: boolean }>({});
+  const [showPasosProduccion, setShowPasosProduccion] = useState(false);
+  const [productosConPasos, setProductosConPasos] = useState<any[]>([]);
+
+  // Agregar estado para guardar el ID del pedido
+  const [pedidoId, setPedidoId] = useState<number | undefined>(undefined);
 
   // Cargar datos iniciales si estamos editando
   useEffect(() => {
@@ -345,11 +351,8 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
 
       // Insertar en ventas
       const ventasData = formData.productos.map(producto => {
-        // Calculamos el precio total de la venta (precio * cantidad) con 2 decimales
         const precio_venta_total_aux = Number((producto.precio).toFixed(2));
         const precio_venta_total = Number((producto.cantidad * producto.precio).toFixed(2));
-        
-        // El descuento se calcula como porcentaje del precio total
         const descuento_calculado = Number(((precio_venta_total * (formData.descuento || 0)) / 100).toFixed(2));
 
         return {
@@ -360,7 +363,7 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
           precio_venta: precio_venta_total_aux,
           descuento: descuento_calculado,
           forma_pago: formData.forma_pago,
-          estado: 'Completada' // Valor por defecto
+          estado: 'Completada'
         };
       });
 
@@ -370,14 +373,34 @@ function PedidoForm({ onClose, isEditing = false, initialData = null, isClosing 
 
       if (ventasError) throw ventasError;
       
-      // Notificar éxito y cerrar modal
-      alert(isEditing ? 'Pedido actualizado con éxito!' : 'Pedido creado con éxito!');
-      onClose();
+      // Preparar datos para los pasos de producción
+      const productosConPasosTemp = formData.productos.map(producto => ({
+        id: producto.id,
+        nombre: producto.nombre,
+        cantidad: producto.cantidad,
+        pasos: pasosProduccion[producto.id] || []
+      }));
+
+      setProductosConPasos(productosConPasosTemp);
+      // Guardar el ID del pedido creado
+      setPedidoId(pedidoData.id);
+      setShowPasosProduccion(true);
+      
     } catch (error) {
       console.error('Error al guardar el pedido:', error);
       alert('Ocurrió un error al guardar el pedido. Por favor intente nuevamente.');
     }
   };
+
+  if (showPasosProduccion) {
+    return (
+      <PasosProduccionCards
+        productos={productosConPasos}
+        onClose={onClose}
+        pedido_id={pedidoId}
+      />
+    );
+  }
 
   return (
     <div style={{
