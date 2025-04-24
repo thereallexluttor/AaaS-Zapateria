@@ -1,15 +1,86 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { PlusCircleIcon, ArrowDownTrayIcon, PrinterIcon, MagnifyingGlassIcon, DocumentTextIcon, PhotoIcon, TableCellsIcon } from '@heroicons/react/24/outline';
 import PedidoForm from '../components/PedidoForm';
+import ProductosPedidoModal from '../components/ProductosPedidoModal';
+import { supabase } from '../lib/supabase';
+
+// Tipo para los datos que vienen de Supabase
+interface PedidoSupabase {
+  id: string;
+  cliente: string;
+  fecha_inicio: string;
+  fecha_entrega: string;
+  estado: 'pendiente' | 'en_proceso' | 'completado';
+  observaciones: string;
+  clientes: {
+    tipo_cliente: string;
+    nombre: string;
+    apellidos: string;
+    nombre_compania: string;
+    email: string;
+    telefono: string;
+    direccion: string;
+    notas: string;
+    contacto_nombre: string;
+    contacto_email: string;
+    contacto_telefono: string;
+    contacto_cargo: string;
+  };
+}
 
 interface Pedido {
   id: string;
   cliente: string;
-  producto: string;
-  cantidad: number;
-  fechaInicio: string;
-  fechaEntrega: string;
+  tipo_cliente: string;
+  nombre: string;
+  apellidos: string;
+  nombre_compania: string;
+  email: string;
+  telefono: string;
+  direccion: string;
+  notas: string;
+  contacto_nombre: string;
+  contacto_email: string;
+  contacto_telefono: string;
+  contacto_cargo: string;
+  fecha_inicio: string;
+  fecha_entrega: string;
   estado: 'pendiente' | 'en_proceso' | 'completado';
+  observaciones: string;
+}
+
+interface ProductoSupabase {
+  nombre: string;
+  precio: number;
+  categoria: string;
+  imagen_url: string;
+}
+
+interface VentaSupabase {
+  cantidad: number;
+  total_venta: number;
+  forma_pago: string;
+  productos: ProductoSupabase;
+}
+
+interface ProductoPedido {
+  nombre: string;
+  precio: number;
+  categoria: string;
+  imagen_url: string;
+  cantidad: number;
+  precio_venta: number;
+  forma_pago: string;
+  descuento: number;
+  tallas: string[];
+  colores: string[];
+  producto_id: number;
+  total_steps: number;
+  completed_steps: number;
+  ventas_id: number | null;
+  cliente_id: number | null;
+  tasks_complete: number | null;
+  total_orders: number | null;
 }
 
 type FilterTab = 'todos' | 'pendiente' | 'en_proceso' | 'completado';
@@ -24,63 +95,77 @@ function Produccion() {
   const [currentPedido, setCurrentPedido] = useState<Pedido | null>(null);
   const [itemsVisible, setItemsVisible] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [isProductosModalOpen, setIsProductosModalOpen] = useState(false);
+  const [productosDelPedido, setProductosDelPedido] = useState<ProductoPedido[]>([]);
+  const [loadingProductos, setLoadingProductos] = useState(false);
 
-  // Simular datos de ejemplo (en una aplicación real, esto vendría de una API)
+  // Cargar datos desde Supabase
   useEffect(() => {
-    // Simulamos una carga
-    setTimeout(() => {
-      // Datos de ejemplo
-      const pedidosEjemplo: Pedido[] = [
-        {
-          id: '1',
-          cliente: 'Calzados Rivera',
-          producto: 'Zapato de vestir negro',
-          cantidad: 50,
-          fechaInicio: '2023-10-01',
-          fechaEntrega: '2023-10-15',
-          estado: 'completado'
-        },
-        {
-          id: '2',
-          cliente: 'Tiendas Moda',
-          producto: 'Sandalia de verano',
-          cantidad: 75,
-          fechaInicio: '2023-10-05',
-          fechaEntrega: '2023-10-20',
-          estado: 'en_proceso'
-        },
-        {
-          id: '3',
-          cliente: 'Calzado Infantil SA',
-          producto: 'Zapato escolar',
-          cantidad: 100,
-          fechaInicio: '2023-10-10',
-          fechaEntrega: '2023-11-01',
-          estado: 'pendiente'
-        },
-        {
-          id: '4',
-          cliente: 'Boutique Eleganza',
-          producto: 'Tacón alto rojo',
-          cantidad: 30,
-          fechaInicio: '2023-10-12',
-          fechaEntrega: '2023-10-28',
-          estado: 'en_proceso'
-        },
-        {
-          id: '5',
-          cliente: 'Deportivos MaxFit',
-          producto: 'Zapatilla deportiva',
-          cantidad: 120,
-          fechaInicio: '2023-10-05',
-          fechaEntrega: '2023-11-10',
-          estado: 'pendiente'
+    async function fetchPedidos() {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('pedidos')
+          .select(`
+            id,
+            cliente,
+            fecha_inicio,
+            fecha_entrega,
+            estado,
+            observaciones,
+            clientes!inner (
+              tipo_cliente,
+              nombre,
+              apellidos,
+              nombre_compania,
+              email,
+              telefono,
+              direccion,
+              notas,
+              contacto_nombre,
+              contacto_email,
+              contacto_telefono,
+              contacto_cargo
+            )
+          `);
+
+        if (error) {
+          console.error('Error al cargar pedidos:', error);
+          throw error;
         }
-      ];
-      
-      setPedidos(pedidosEjemplo);
+
+        // Transformar los datos al formato esperado por la interfaz
+        const pedidosFormateados = (data as any[]).map(pedido => ({
+          id: pedido.id,
+          cliente: pedido.cliente,
+          tipo_cliente: pedido.clientes?.tipo_cliente || '',
+          nombre: pedido.clientes?.nombre || '',
+          apellidos: pedido.clientes?.apellidos || '',
+          nombre_compania: pedido.clientes?.nombre_compania || '',
+          email: pedido.clientes?.email || '',
+          telefono: pedido.clientes?.telefono || '',
+          direccion: pedido.clientes?.direccion || '',
+          notas: pedido.clientes?.notas || '',
+          contacto_nombre: pedido.clientes?.contacto_nombre || '',
+          contacto_email: pedido.clientes?.contacto_email || '',
+          contacto_telefono: pedido.clientes?.contacto_telefono || '',
+          contacto_cargo: pedido.clientes?.contacto_cargo || '',
+          fecha_inicio: pedido.fecha_inicio || '',
+          fecha_entrega: pedido.fecha_entrega || '',
+          estado: pedido.estado as 'pendiente' | 'en_proceso' | 'completado',
+          observaciones: pedido.observaciones || ''
+        }));
+
+        console.log('Pedidos formateados:', pedidosFormateados); // Para debug
+        setPedidos(pedidosFormateados);
+      } catch (error) {
+        console.error('Error al procesar datos de pedidos:', error);
+      } finally {
       setLoading(false);
-    }, 1000);
+      }
+    }
+
+    fetchPedidos();
   }, []);
 
   // Filtrar pedidos según búsqueda y pestaña activa
@@ -91,9 +176,13 @@ function Produccion() {
     if (searchTerm.trim() !== '') {
       const search = searchTerm.toLowerCase();
       filtered = filtered.filter(
-        p => p.cliente.toLowerCase().includes(search) || 
-             p.producto.toLowerCase().includes(search) ||
-             p.id.toLowerCase().includes(search)
+        p => {
+          const nombreCompleto = p.nombre_compania || `${p.nombre} ${p.apellidos}`.trim();
+          return nombreCompleto.toLowerCase().includes(search) || 
+                 p.id.toLowerCase().includes(search) ||
+                 p.email?.toLowerCase().includes(search) ||
+                 p.telefono?.includes(search);
+        }
       );
     }
     
@@ -191,6 +280,158 @@ function Produccion() {
       default:
         return estado;
     }
+  };
+
+  // Obtener el nombre del cliente formateado (empresa o nombre completo)
+  const getNombreCliente = (pedido: Pedido) => {
+    if (pedido.tipo_cliente === 'compania') {
+      return pedido.nombre_compania || 'Sin nombre de compañía';
+    } else {
+      const nombreCompleto = `${pedido.nombre || ''} ${pedido.apellidos || ''}`.trim();
+      return nombreCompleto || 'Sin nombre';
+    }
+  };
+
+  // Función para cargar los productos del pedido
+  const cargarProductosPedido = async (pedidoId: string) => {
+    setLoadingProductos(true);
+    setProductosDelPedido([]); // Clear previous products
+
+    try {
+      // 1. Obtener el pedido para extraer el cliente_id
+      const { data: pedidoData, error: pedidoError } = await supabase
+        .from('pedidos')
+        .select('id, cliente')
+        .eq('id', pedidoId)
+        .single();
+      if (pedidoError || !pedidoData) {
+        console.error('No se pudo obtener el cliente_id del pedido:', pedidoError);
+        setLoadingProductos(false);
+        return;
+      }
+      const clienteId = pedidoData.cliente;
+
+      // 2. Fetch base product details from detalle_pedidos
+      const { data: detalleData, error: detalleError } = await supabase
+        .from('detalle_pedidos')
+        .select(`
+          id,
+          pedido_id,
+          producto_id,
+          tallas,
+          colores,
+          cantidad,
+          precio_unitario,
+          productos!inner (
+            id,
+            nombre,
+            precio,
+            categoria,
+            imagen_url
+          )
+        `)
+        .eq('pedido_id', pedidoId)
+        .returns<{
+          id: number;
+          pedido_id: number;
+          producto_id: number;
+          tallas: string;
+          colores: string;
+          cantidad: number;
+          precio_unitario: number;
+          productos: {
+            id: number;
+            nombre: string;
+            precio: number;
+            categoria: string;
+            imagen_url: string;
+          };
+        }[]>();
+
+      if (detalleError) {
+        console.error('Error de Supabase al cargar detalles:', detalleError);
+        throw detalleError;
+      }
+
+      if (!detalleData || detalleData.length === 0) {
+        setLoadingProductos(false);
+        return;
+      }
+
+      // 3. Llamar a la función RPC para obtener datos de ventas-producción
+      const { data: ventasProduccionData, error: ventasProduccionError } = await supabase.rpc('obtener_datos_ventas_produccion');
+      if (ventasProduccionError) {
+        console.error('Error al llamar obtener_datos_ventas_produccion:', ventasProduccionError);
+      }
+
+      // 4. Mapear los datos de ventas-producción por producto_id y cliente_id
+      const ventasProduccionMap = (ventasProduccionData || []).reduce((acc: any, item: any) => {
+        const key = `${item.producto_id}_${item.cliente_id}`;
+        acc[key] = item;
+        return acc;
+      }, {});
+
+      // 5. Extract unique product IDs
+      const productIds = detalleData.map(item => item.productos.id);
+      const uniqueProductIds = [...new Set(productIds)];
+
+      let maxOrdersMap: { [key: number]: number } = {};
+      if (uniqueProductIds.length > 0) {
+        const { data: pasosData, error: pasosError } = await supabase
+          .from('pasos_produccion')
+          .select('producto_id, orden')
+          .in('producto_id', uniqueProductIds);
+        if (!pasosError && pasosData) {
+          maxOrdersMap = pasosData.reduce((acc, paso) => {
+            acc[paso.producto_id] = Math.max(acc[paso.producto_id] || 0, paso.orden);
+            return acc;
+          }, {} as { [key: number]: number });
+        }
+      }
+
+      // 6. Formatear los datos finales, enlazando con ventas-producción usando cliente_id
+      const productosFormateados: ProductoPedido[] = detalleData.map(item => {
+        const productoId = item.productos.id;
+        const maxStepsPerUnit = maxOrdersMap[productoId] || 1;
+        const totalSteps = item.cantidad * maxStepsPerUnit;
+        // Usar clienteId obtenido del pedido
+        const key = `${productoId}_${clienteId}`;
+        const ventaProduccion = ventasProduccionMap[key];
+        return {
+          producto_id: productoId,
+          nombre: item.productos.nombre,
+          precio: item.productos.precio,
+          categoria: item.productos.categoria,
+          imagen_url: item.productos.imagen_url,
+          cantidad: item.cantidad,
+          precio_venta: item.precio_unitario * item.cantidad,
+          forma_pago: 'N/A',
+          descuento: 0,
+          tallas: JSON.parse(item.tallas || '[]'),
+          colores: JSON.parse(item.colores || '[]'),
+          total_steps: totalSteps,
+          completed_steps: Math.floor(totalSteps * 0.4),
+          ventas_id: ventaProduccion?.ventas_id || null,
+          cliente_id: ventaProduccion?.cliente_id || null,
+          tasks_complete: ventaProduccion?.tasks_complete || null,
+          total_orders: ventaProduccion?.total_orders || null,
+        };
+      });
+
+      setProductosDelPedido(productosFormateados);
+    } catch (error) {
+      console.error('Error general al cargar productos del pedido:', error);
+      setProductosDelPedido([]);
+    } finally {
+      setLoadingProductos(false);
+    }
+  };
+
+  // Función para manejar el clic en la tarjeta
+  const handleCardClick = (pedido: Pedido) => {
+    console.log('Pedido seleccionado:', pedido);
+    cargarProductosPedido(pedido.id); // This now fetches steps too
+    setIsProductosModalOpen(true);
   };
 
   // Resultados filtrados
@@ -330,45 +571,59 @@ function Produccion() {
         style={{ 
           maxHeight: 'calc(100vh - 220px)', 
           overflowY: 'auto', 
-          position: 'relative' 
+          position: 'relative',
+          padding: '12px'
         }} 
         className="apple-scrollbar"
       >
         <div className={`inventory-items-container ${getTransitionClass()}`}>
           {!loading && filteredItems.length > 0 && (
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead style={{ backgroundColor: '#F9FAFB' }}>
-                  <tr>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 500, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ID</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 500, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cliente</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 500, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Producto</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 500, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cantidad</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 500, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Inicio</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 500, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Entrega</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 500, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Estado</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 500, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <div className="pedidos-list">
                   {filteredItems.map((pedido, index) => {
                     const [bgColor, textColor] = getEstadoColor(pedido.estado).split(' ');
                     return (
-                      <tr key={pedido.id} className="inventory-item-wrapper" style={{ 
-                        borderBottom: '1px solid #E5E7EB',
-                        transition: 'background-color 0.2s'
-                      }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'} 
-                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}>
-                        <td style={{ padding: '16px', fontSize: '14px', color: '#111827', fontWeight: 500 }}>{pedido.id}</td>
-                        <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{pedido.cliente}</td>
-                        <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{pedido.producto}</td>
-                        <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{pedido.cantidad}</td>
-                        <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{pedido.fechaInicio}</td>
-                        <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{pedido.fechaEntrega}</td>
-                        <td style={{ padding: '16px', fontSize: '14px' }}>
+                  <div
+                    key={pedido.id}
+                    className="pedido-card"
+                    onClick={() => handleCardClick(pedido)}
+                    style={{
+                      backgroundColor: 'white',
+                      borderRadius: '8px',
+                      border: '1px solid #E5E7EB',
+                      overflow: 'hidden',
+                      transition: 'transform 0.2s ease, border-color 0.2s ease',
+                      marginBottom: '16px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {/* Encabezado de la tarjeta */}
+                    <div style={{
+                      padding: '16px',
+                      borderBottom: '1px solid #f3f4f6',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      backgroundColor: '#F9FAFB'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: '16px', color: '#111827' }}>
+                            {getNombreCliente(pedido)}
+                          </div>
+                          <div style={{ 
+                            fontSize: '13px', 
+                            color: '#6B7280',
+                            marginTop: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                          }}>
+                            {pedido.tipo_cliente === 'compania' ? '🏢 Empresa' : '👤 Persona'}
+                          </div>
+                        </div>
                           <span style={{ 
                             display: 'inline-block',
-                            padding: '2px 8px',
+                          padding: '4px 12px',
                             borderRadius: '9999px',
                             fontSize: '12px',
                             fontWeight: 500,
@@ -377,47 +632,87 @@ function Produccion() {
                           }}>
                             {getEstadoTexto(pedido.estado)}
                           </span>
-                        </td>
-                        <td style={{ padding: '16px', fontSize: '14px' }}>
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <button
-                              onClick={() => handleEditPedido(pedido)}
-                              style={{ 
-                                background: 'none',
-                                border: 'none',
-                                color: '#4F46E5',
-                                fontSize: '14px',
-                                cursor: 'pointer',
-                                padding: '0',
-                                transition: 'color 0.2s'
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.color = '#3730A3'}
-                              onMouseLeave={(e) => e.currentTarget.style.color = '#4F46E5'}
-                            >
-                              Editar
-                            </button>
-                            <button
-                              style={{ 
-                                background: 'none',
-                                border: 'none',
-                                color: '#EF4444',
-                                fontSize: '14px',
-                                cursor: 'pointer',
-                                padding: '0',
-                                transition: 'color 0.2s'
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.color = '#B91C1C'}
-                              onMouseLeave={(e) => e.currentTarget.style.color = '#EF4444'}
-                            >
-                              Eliminar
-                            </button>
                           </div>
-                        </td>
-                      </tr>
+                    </div>
+
+                    {/* Contenido de la tarjeta */}
+                    <div style={{ padding: '20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '24px' }}>
+                      {/* Sección de Contacto */}
+                      <div className="card-section">
+                        <h4 className="section-title">Contacto Principal</h4>
+                        {pedido.email && (
+                          <div className="info-row">
+                            <span className="info-label">✉️ Email:</span>
+                            <span className="info-value">{pedido.email}</span>
+                          </div>
+                        )}
+                        {pedido.telefono && (
+                          <div className="info-row">
+                            <span className="info-label">📞 Teléfono:</span>
+                            <span className="info-value">{pedido.telefono}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Sección de Contacto Adicional */}
+                      {(pedido.contacto_nombre || pedido.contacto_email || pedido.contacto_telefono) && (
+                        <div className="card-section">
+                          <h4 className="section-title">Contacto Adicional</h4>
+                          {pedido.contacto_nombre && (
+                            <div className="info-row">
+                              <span className="info-label">👤 Nombre:</span>
+                              <span className="info-value">
+                                {pedido.contacto_nombre}
+                                {pedido.contacto_cargo && ` (${pedido.contacto_cargo})`}
+                              </span>
+                            </div>
+                          )}
+                          {pedido.contacto_email && (
+                            <div className="info-row">
+                              <span className="info-label">✉️ Email:</span>
+                              <span className="info-value">{pedido.contacto_email}</span>
+                            </div>
+                          )}
+                          {pedido.contacto_telefono && (
+                            <div className="info-row">
+                              <span className="info-label">📞 Teléfono:</span>
+                              <span className="info-value">{pedido.contacto_telefono}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Sección de Dirección */}
+                      {pedido.direccion && (
+                        <div className="card-section">
+                          <h4 className="section-title">Dirección</h4>
+                          <div className="info-row">
+                            <span className="info-label">📍</span>
+                            <span className="info-value">{pedido.direccion}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Sección de Fechas */}
+                      <div className="card-section">
+                        <h4 className="section-title">Fechas</h4>
+                        <div className="info-row">
+                          <span className="info-label">🏁 Inicio:</span>
+                          <span className="info-value">
+                            {new Date(pedido.fecha_inicio).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="info-row">
+                          <span className="info-label">🎯 Entrega:</span>
+                          <span className="info-value">
+                            {new Date(pedido.fecha_entrega).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                     );
                   })}
-                </tbody>
-              </table>
             </div>
           )}
           
@@ -502,153 +797,130 @@ function Produccion() {
           onMouseEnter={(e) => {
             e.currentTarget.style.transform = 'translateY(-2px)';
             e.currentTarget.style.borderColor = '#D1D5DB';
+            e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)';
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.transform = 'translateY(0)';
             e.currentTarget.style.borderColor = '#E5E7EB';
+            e.currentTarget.style.boxShadow = 'none';
           }}
         >
           <PlusCircleIcon style={{ width: '20px', height: '20px', marginRight: '8px' }} />
           Nuevo Pedido
         </button>
       </div>
+
+      {/* Modal de Productos - Use the new component */}
+      <ProductosPedidoModal
+        isOpen={isProductosModalOpen}
+        onClose={() => setIsProductosModalOpen(false)}
+        productos={productosDelPedido}
+        loading={loadingProductos}
+      />
+
+      {/* Estilos generales y de animación (Keep styles not moved to the modal) */}
+      <style>{`
+        .pedidos-list {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          max-width: 100%;
+          margin: 0 auto;
+        }
+
+        .pedido-card {
+          width: 100%;
+        }
+
+        .pedido-card:hover {
+          transform: translateY(-2px);
+          border-color: #D1D5DB;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .card-section {
+          padding: 0;
+          margin-bottom: 0;
+        }
+
+        .section-title {
+          font-size: 14px;
+          font-weight: 600;
+          color: #4B5563;
+          margin-bottom: 12px;
+          padding-bottom: 8px;
+          border-bottom: 1px solid #f3f4f6;
+          display: inline-block;
+        }
+
+        .info-row {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          margin-bottom: 8px;
+          font-size: 13px;
+          color: #374151;
+        }
+
+        .info-row:last-child {
+          margin-bottom: 0;
+        }
+
+        .info-label {
+          color: #6B7280;
+          min-width: 24px;
+          flex-shrink: 0;
+          line-height: 1.5;
+        }
+
+        .info-value {
+          flex: 1;
+          word-break: break-word;
+          line-height: 1.5;
+        }
+
+        @media (max-width: 640px) {
+          .pedido-card {
+            margin-bottom: 16px;
+          }
+        }
+      `}</style>
     </div>
   );
 }
 
-// Definir animaciones usando CSS global en un estilo incrustado
-const animationStyle = document.createElement('style');
-animationStyle.innerHTML = `
-  @keyframes modalAppear {
-    from {
-      opacity: 0;
-      transform: scale(0.95);
+// Global styles (ensure this runs once)
+const styleId = 'produccion-animation-styles';
+if (!document.getElementById(styleId)) {
+  const animationStyle = document.createElement('style');
+  animationStyle.id = styleId;
+  animationStyle.innerHTML = `
+    @keyframes modalAppear {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
     }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
 
-  /* Estilo de scrollbar tipo Apple */
-  .apple-scrollbar::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-  
-  .apple-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  
-  .apple-scrollbar::-webkit-scrollbar-thumb {
-    background-color: rgba(0, 0, 0, 0.2);
-    border-radius: 10px;
-    border: 2px solid transparent;
-    background-clip: content-box;
-  }
-  
-  .apple-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(0, 0, 0, 0.4);
-    border: 2px solid transparent;
-    background-clip: content-box;
-  }
-  
-  /* Para Firefox */
-  .apple-scrollbar {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
-  }
-  
-  /* Animaciones para las transiciones de categorías */
-  .inventory-items-container {
-    transition: transform 0.3s ease, opacity 0.3s ease;
-  }
-  
-  .items-enter-active-right {
-    opacity: 1;
-    transform: translateX(0);
-  }
-  
-  .items-exit-active-right {
-    opacity: 0;
-    transform: translateX(-20px);
-  }
-  
-  .items-enter-active-left {
-    opacity: 1;
-    transform: translateX(0);
-  }
-  
-  .items-exit-active-left {
-    opacity: 0;
-    transform: translateX(20px);
-  }
-  
-  .inventory-item-wrapper {
-    animation: itemAppear 0.3s ease forwards;
-    opacity: 0;
-    transform: translateY(15px);
-  }
-  
-  @keyframes itemAppear {
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
-  /* Agregar retraso a cada elemento para efecto cascada */
-  .inventory-item-wrapper:nth-child(1) { animation-delay: 0.05s; }
-  .inventory-item-wrapper:nth-child(2) { animation-delay: 0.1s; }
-  .inventory-item-wrapper:nth-child(3) { animation-delay: 0.15s; }
-  .inventory-item-wrapper:nth-child(4) { animation-delay: 0.2s; }
-  .inventory-item-wrapper:nth-child(5) { animation-delay: 0.25s; }
-  .inventory-item-wrapper:nth-child(6) { animation-delay: 0.3s; }
-  .inventory-item-wrapper:nth-child(7) { animation-delay: 0.35s; }
-  .inventory-item-wrapper:nth-child(8) { animation-delay: 0.4s; }
-  .inventory-item-wrapper:nth-child(9) { animation-delay: 0.45s; }
-  .inventory-item-wrapper:nth-child(10) { animation-delay: 0.5s; }
-  
-  /* Animación para pestañas */
-  .tab-underline {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 0;
-    height: 2px;
-    background-color: #4F46E5;
-    transition: width 0.3s ease;
-  }
-  
-  .tab-underline-active {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 2px;
-    background-color: #4F46E5;
-    transition: width 0.3s ease;
-  }
-  
-  /* Spinner de carga */
-  .spinner {
-    width: 24px;
-    height: 24px;
-    border: 3px solid rgba(79, 70, 229, 0.2);
-    border-radius: 50%;
-    border-top-color: #4F46E5;
-    animation: spin 1s linear infinite;
-  }
-  
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-  
-  /* Importar fuente Poppins */
+    .apple-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+    .apple-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .apple-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(0, 0, 0, 0.2); border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
+    .apple-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(0, 0, 0, 0.4); }
+    .apple-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.2) transparent; }
+
+    .inventory-items-container { transition: transform 0.3s ease, opacity 0.3s ease; }
+    .items-enter-active-right { opacity: 1; transform: translateX(0); }
+    .items-exit-active-right { opacity: 0; transform: translateX(-20px); }
+    .items-enter-active-left { opacity: 1; transform: translateX(0); }
+    .items-exit-active-left { opacity: 0; transform: translateX(20px); }
+
+    .tab-underline { position: absolute; bottom: 0; left: 0; width: 0; height: 2px; background-color: #4F46E5; transition: width 0.3s ease; }
+    .tab-underline-active { position: absolute; bottom: 0; left: 0; width: 100%; height: 2px; background-color: #4F46E5; transition: width 0.3s ease; }
+
+    .spinner { width: 24px; height: 24px; border: 3px solid rgba(79, 70, 229, 0.2); border-radius: 50%; border-top-color: #4F46E5; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 `;
 document.head.appendChild(animationStyle);
+}
 
 export default Produccion; 
