@@ -5,7 +5,7 @@ import ClienteItem, { ClienteItemType } from '../components/ClienteItem';
 import { useClientes } from '../lib/hooks';
 
 // Tipos de pestañas para filtrar clientes
-type FilterTab = 'todos' | 'regulares' | 'nuevos' | 'inactivos';
+type FilterTab = 'todos';
 type ModalType = 'cliente' | null;
 
 function Clientes() {
@@ -15,8 +15,6 @@ function Clientes() {
   const [selectedCliente, setSelectedCliente] = useState<ClienteItemType | null>(null);
   const [itemsVisible, setItemsVisible] = useState(true);
   const [activeTab, setActiveTab] = useState<FilterTab>('todos');
-  const [transitionDirection, setTransitionDirection] = useState<'left' | 'right'>('right');
-  const [prevTab, setPrevTab] = useState<FilterTab>('todos');
   
   // Referencia para guardar el último término de búsqueda que se envió a la API
   const lastSearchTermRef = useRef<string>('');
@@ -26,68 +24,7 @@ function Clientes() {
     // Crear estilos para las animaciones
     const animationStyle = document.createElement('style');
     animationStyle.innerHTML = `
-      /* Animaciones para la transición entre pestañas */
-      .fade-in-right {
-        animation: fadeInRight 0.3s forwards;
-      }
-      
-      .fade-out-left {
-        animation: fadeOutLeft 0.3s forwards;
-      }
-      
-      .fade-in-left {
-        animation: fadeInLeft 0.3s forwards;
-      }
-      
-      .fade-out-right {
-        animation: fadeOutRight 0.3s forwards;
-      }
-      
-      @keyframes fadeInRight {
-        from {
-          opacity: 0;
-          transform: translateX(20px);
-        }
-        to {
-          opacity: 1;
-          transform: translateX(0);
-        }
-      }
-      
-      @keyframes fadeOutLeft {
-        from {
-          opacity: 1;
-          transform: translateX(0);
-        }
-        to {
-          opacity: 0;
-          transform: translateX(-20px);
-        }
-      }
-      
-      @keyframes fadeInLeft {
-        from {
-          opacity: 0;
-          transform: translateX(-20px);
-        }
-        to {
-          opacity: 1;
-          transform: translateX(0);
-        }
-      }
-      
-      @keyframes fadeOutRight {
-        from {
-          opacity: 1;
-          transform: translateX(0);
-        }
-        to {
-          opacity: 0;
-          transform: translateX(20px);
-        }
-      }
-      
-      /* Animación para elementos individuales */
+      /* Animaciones para elementos individuales */
       .cliente-item-wrapper {
         opacity: 0;
         transform: translateY(10px);
@@ -117,27 +54,6 @@ function Clientes() {
       .cliente-item-wrapper:nth-child(8) { animation-delay: 0.4s; }
       .cliente-item-wrapper:nth-child(9) { animation-delay: 0.45s; }
       .cliente-item-wrapper:nth-child(10) { animation-delay: 0.5s; }
-      
-      /* Estilos para las pestañas */
-      .tab-underline {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        width: 0;
-        height: 2px;
-        background-color: #4F46E5;
-        transition: width 0.3s ease;
-      }
-      
-      .tab-underline-active {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        height: 2px;
-        background-color: #4F46E5;
-        transition: width 0.3s ease;
-      }
       
       /* Spinner para carga */
       .spinner {
@@ -228,37 +144,6 @@ function Clientes() {
     }
   }, [getClientes]);
   
-  // Manejar el cambio de pestaña
-  const handleTabChange = useCallback((tab: FilterTab) => {
-    // Establecer la dirección de la transición
-    const tabs: FilterTab[] = ['todos', 'regulares', 'nuevos', 'inactivos'];
-    const currentIndex = tabs.indexOf(activeTab);
-    const newIndex = tabs.indexOf(tab);
-    
-    setTransitionDirection(newIndex > currentIndex ? 'right' : 'left');
-    setPrevTab(activeTab);
-    
-    // Ocultar los elementos actuales
-    setItemsVisible(false);
-    
-    // Después de la animación, cambiar la pestaña y mostrar los nuevos elementos
-    setTimeout(() => {
-      setActiveTab(tab);
-      
-      setTimeout(() => {
-        setItemsVisible(true);
-      }, 50);
-    }, 300);
-  }, [activeTab]);
-  
-  // Obtener la clase de transición basada en la dirección
-  const getTransitionClass = useCallback(() => {
-    if (!itemsVisible) {
-      return transitionDirection === 'right' ? 'fade-out-left' : 'fade-out-right';
-    }
-    return transitionDirection === 'right' ? 'fade-in-right' : 'fade-in-left';
-  }, [itemsVisible, transitionDirection]);
-  
   const openModal = (type: ModalType) => {
     setActiveModal(type);
   };
@@ -280,48 +165,8 @@ function Clientes() {
     console.log('Ver detalles de:', cliente);
   }, []);
   
-  // Filtrar clientes según la pestaña activa
-  const getFilteredClientes = useCallback(() => {
-    // Clasificar clientes por la fecha de registro para las pestañas
-    if (activeTab === 'todos') return clientes;
-    
-    const today = new Date();
-    const thirtyDaysAgo = new Date(today);
-    thirtyDaysAgo.setDate(today.getDate() - 30);
-    
-    const sixMonthsAgo = new Date(today);
-    sixMonthsAgo.setMonth(today.getMonth() - 6);
-    
-    switch (activeTab) {
-      case 'regulares':
-        // En esta versión, consideramos regulares a los clientes con más de 6 meses de registro
-        return clientes.filter(cliente => {
-          if (!cliente.fecha_registro) return false;
-          const fechaRegistro = new Date(cliente.fecha_registro);
-          return fechaRegistro < sixMonthsAgo;
-        });
-      case 'nuevos':
-        // Clientes registrados en los últimos 30 días
-        return clientes.filter(cliente => {
-          if (!cliente.fecha_registro) return false;
-          const fechaRegistro = new Date(cliente.fecha_registro);
-          return fechaRegistro >= thirtyDaysAgo;
-        });
-      case 'inactivos':
-        // Esta categoría no tiene mucho sentido sin datos de compra
-        // Por ahora mostraremos los clientes de entre 1 y 6 meses
-        return clientes.filter(cliente => {
-          if (!cliente.fecha_registro) return false;
-          const fechaRegistro = new Date(cliente.fecha_registro);
-          return fechaRegistro >= sixMonthsAgo && fechaRegistro < thirtyDaysAgo;
-        });
-      default:
-        return clientes;
-    }
-  }, [clientes, activeTab]);
-  
   // Preparar los clientes para mostrar
-  const clienteItems: ClienteItemType[] = getFilteredClientes().map(cliente => ({
+  const clienteItems: ClienteItemType[] = clientes.map(cliente => ({
     ...cliente,
     type: 'cliente'
   }));
@@ -364,44 +209,6 @@ function Clientes() {
         />
       </div>
       
-      {/* Pestañas de filtro */}
-      <div style={{
-        display: 'flex',
-        borderBottom: '1px solid #E5E7EB',
-        marginBottom: '20px',
-        paddingBottom: '2px'
-      }}>
-        {(['todos', 'regulares', 'nuevos', 'inactivos'] as FilterTab[]).map((tab) => (
-          <button 
-            key={tab}
-            onClick={() => handleTabChange(tab)}
-            style={{
-              padding: '10px 16px',
-              fontSize: '14px',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              fontWeight: activeTab === tab ? 600 : 400,
-              color: activeTab === tab ? '#4F46E5' : '#6B7280',
-              borderBottom: activeTab === tab ? '2px solid #4F46E5' : 'none',
-              marginBottom: activeTab === tab ? '-2px' : '0',
-              transition: 'all 0.2s',
-              fontFamily: "'Poppins', sans-serif",
-              position: 'relative',
-              overflow: 'hidden'
-            }}
-          >
-            {/* Animación de subrayado */}
-            <span className={activeTab === tab ? 'tab-underline-active' : 'tab-underline'} />
-            
-            {tab === 'todos' && 'Todos'}
-            {tab === 'regulares' && '🛒 Regulares'}
-            {tab === 'nuevos' && '✨ Nuevos'}
-            {tab === 'inactivos' && '⏰ Inactivos'}
-          </button>
-        ))}
-      </div>
-      
       {/* Título con contador */}
       <h2 style={{ 
         fontSize: '18px', 
@@ -414,10 +221,7 @@ function Clientes() {
         justifyContent: 'space-between'
       }}>
         <span>
-          {activeTab === 'todos' && 'Lista de Clientes'}
-          {activeTab === 'regulares' && 'Clientes Regulares'}
-          {activeTab === 'nuevos' && 'Clientes Nuevos'}
-          {activeTab === 'inactivos' && 'Clientes Inactivos'}
+          Lista de Clientes
           {!loading && clienteItems.length > 0 && 
             <span style={{ 
               fontSize: '14px', 
@@ -441,7 +245,7 @@ function Clientes() {
         )}
       </h2>
       
-      {/* Lista de clientes con transición */}
+      {/* Lista de clientes */}
       <div 
         style={{ 
           maxHeight: 'calc(100vh - 250px)', 
@@ -470,7 +274,7 @@ function Clientes() {
         
         {/* Lista de clientes con animación */}
         <div 
-          className={`clientes-container ${getTransitionClass()}`}
+          className="clientes-container"
           style={{
             opacity: itemsVisible ? 1 : 0,
             transform: itemsVisible ? 'translateY(0)' : 'translateY(10px)',
@@ -486,13 +290,7 @@ function Clientes() {
             }}>
               {searchTerm 
                 ? `No se encontraron clientes para "${searchTerm}"` 
-                : activeTab === 'todos'
-                  ? 'No hay clientes registrados. Agrega algunos usando el botón "Nuevo Cliente".'
-                  : activeTab === 'regulares'
-                    ? 'No hay clientes regulares registrados.'
-                    : activeTab === 'nuevos'
-                      ? 'No hay clientes nuevos registrados en los últimos 30 días.'
-                      : 'No hay clientes inactivos.'
+                : 'No hay clientes registrados. Agrega algunos usando el botón "Nuevo Cliente".'
               }
             </div>
           ) : !loading && (

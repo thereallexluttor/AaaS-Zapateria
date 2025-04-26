@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard'
 import Inventario from './pages/Inventario'
 import Clientes from './pages/Clientes'
 import Trabajadores from './pages/Trabajadores'
+import Produccion from './pages/Produccion'
 
 function App() {
   const [activePage, setActivePage] = useState<string>('home');
@@ -26,6 +27,8 @@ function App() {
         return <Clientes />;
       case 'employees':
         return <Trabajadores />;
+      case 'production':
+        return <Produccion />;
       default:
         return <div className="flex items-center justify-center h-full">
           <p className="text-xl text-gray-500">Página en desarrollo</p>
