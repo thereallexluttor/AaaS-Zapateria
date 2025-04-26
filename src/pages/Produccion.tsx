@@ -301,7 +301,7 @@ function Produccion() {
       // 1. Obtener el pedido para extraer el cliente_id
       const { data: pedidoData, error: pedidoError } = await supabase
         .from('pedidos')
-        .select('id, cliente')
+        .select('id, cliente, estado')
         .eq('id', pedidoId)
         .single();
       if (pedidoError || !pedidoData) {
@@ -417,6 +417,32 @@ function Produccion() {
           total_orders: ventaProduccion?.total_orders || null,
         };
       });
+
+      // Verificar si algún producto tiene tasks_complete > 0
+      const hayProductosEnProceso = productosFormateados.some(
+        producto => (producto.tasks_complete ?? 0) > 0
+      );
+
+      // Si hay productos en proceso y el pedido no está ya en ese estado, actualizar el estado
+      if (hayProductosEnProceso && pedidoData.estado !== 'en_proceso') {
+        const { error: updateError } = await supabase
+          .from('pedidos')
+          .update({ estado: 'en_proceso' })
+          .eq('id', pedidoId);
+
+        if (updateError) {
+          console.error('Error al actualizar el estado del pedido:', updateError);
+        } else {
+          // Actualizar el estado en el estado local de React
+          setPedidos(prevPedidos => 
+            prevPedidos.map(pedido => 
+              pedido.id === pedidoId 
+                ? { ...pedido, estado: 'en_proceso' }
+                : pedido
+            )
+          );
+        }
+      }
 
       setProductosDelPedido(productosFormateados);
     } catch (error) {
