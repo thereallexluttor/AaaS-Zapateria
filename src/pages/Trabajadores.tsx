@@ -415,7 +415,7 @@ function Trabajadores() {
       position: 'relative', 
       width: '100%', 
       height: '100%', 
-      padding: '24px', 
+      padding: '24px 24px 0 24px', // Removed bottom padding 
       fontFamily: "'Poppins', sans-serif",
       overflow: 'hidden', // Contain everything within the container
       display: 'flex',
@@ -566,16 +566,15 @@ function Trabajadores() {
       {/* Lista de trabajadores con transición */}
       <div 
         style={{ 
-          height: '100%', // Fill available space
-          minHeight: '200px', // Minimum size 
-          maxHeight: 'calc(100vh - 220px)', 
+          flex: '1 1 auto', // Add flex grow/shrink
+          minHeight: '200px', // Keep minimum size 
           overflowY: 'auto', 
           position: 'relative',
-          marginBottom: '20px',
+          marginBottom: '0px',
           // Add custom styled scrollbar
           scrollbarWidth: 'thin', // For Firefox
           scrollbarColor: '#c1c1c1 #f1f1f1', // For Firefox 
-        }}
+        }} 
         className="custom-scrollbar" // Add custom scrollbar class
       >
         {/* Mostrar mensaje de carga */}
@@ -614,10 +613,10 @@ function Trabajadores() {
             }}>
               {searchTerm 
                 ? `No se encontraron trabajadores para "${searchTerm}"` 
-                : activeTab === 'produccion'
-                  ? 'No hay trabajadores de producción registrados.'
-                  : activeTab === 'administrativo'
-                    ? 'No hay personal administrativo registrado.'
+                  : activeTab === 'produccion'
+                    ? 'No hay trabajadores de producción registrados.'
+                      : activeTab === 'administrativo'
+                        ? 'No hay personal administrativo registrado.'
                     : ''
               }
             </div>
@@ -633,8 +632,8 @@ function Trabajadores() {
                   />
                 </div>
               ))}
-              {/* Espacio adicional para permitir scroll completo */}
-              <div style={{ height: '100px' }}></div>
+              {/* Add some padding at the bottom of the scroll */}
+              <div style={{ height: '24px' }}></div> 
             </div>
           )}
         </div>
@@ -650,7 +649,7 @@ function Trabajadores() {
           gap: '12px',
           zIndex: 9999,
           // Add shadow to make buttons stand out against scroll content
-          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          backgroundColor: 'rgba(255, 255, 255, 0.77)',
           padding: '8px',
           borderRadius: '8px',
           boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)'
