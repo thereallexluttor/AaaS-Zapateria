@@ -35,7 +35,7 @@ export async function generateQRCode(category: string, id: string): Promise<stri
 export async function saveQRCodeAndUpdateEntity(
   category: string, 
   id: string, 
-  tableName: 'materiales' | 'herramientas' | 'productos'
+  tableName: 'materiales' | 'herramientas' | 'productos_table'
 ): Promise<string | null> {
   try {
     // Generar el código QR como URL de datos
@@ -518,7 +518,7 @@ export function useProductos() {
     
     try {
       let query = supabase
-        .from('productos')
+        .from('productos_table')
         .select('*');
       
       if (searchQuery && searchQuery.trim() !== '') {
@@ -551,8 +551,6 @@ export function useProductos() {
       const productoData = {
         nombre: producto.nombre,
         precio: producto.precio,
-        stock: producto.stock,
-        stock_minimo: producto.stock_minimo,
         categoria: producto.categoria,
         descripcion: producto.descripcion,
         tallas: producto.tallas,
@@ -565,7 +563,7 @@ export function useProductos() {
       console.log('Guardando producto en la base de datos:', productoData);
       
       const { data, error } = await supabase
-        .from('productos')
+        .from('productos_table')
         .insert([productoData])
         .select();
       
@@ -580,7 +578,7 @@ export function useProductos() {
       if (data?.[0]?.id) {
         try {
           // Usar la nueva función para guardar el QR en el bucket 'qrcodes'
-          const qrImageUrl = await saveQRCodeAndUpdateEntity('producto', data[0].id, 'productos');
+          const qrImageUrl = await saveQRCodeAndUpdateEntity('producto', data[0].id, 'productos_table');
           
           if (qrImageUrl) {
             // Actualizar el objeto para devolverlo con el QR
@@ -924,7 +922,7 @@ export function useInventario() {
     
     try {
       // Mapear el tipo a la tabla correspondiente
-      const tableName = `${tipo}s` as 'materiales' | 'herramientas' | 'productos';
+      const tableName = tipo === 'producto' ? 'productos_table' : `${tipo}s` as 'materiales' | 'herramientas' | 'productos_table';
       
       // Consultar solo el elemento específico
       const { data, error } = await supabase
@@ -954,7 +952,7 @@ export function useInventario() {
     
     try {
       // Mapear el tipo a la tabla correspondiente
-      const tableName = `${tipo}s` as 'materiales' | 'herramientas' | 'productos';
+      const tableName = tipo === 'producto' ? 'productos_table' : `${tipo}s` as 'materiales' | 'herramientas' | 'productos_table';
       
       // Verificar si el elemento ya tiene un QR
       const { data: existingItem, error: fetchError } = await supabase

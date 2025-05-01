@@ -5,7 +5,7 @@ import TrabajadorItem, { TrabajadorItemType } from '../components/TrabajadorItem
 import { useTrabajadores } from '../lib/hooks';
 
 // Tipos de pestañas para filtrar trabajadores
-type FilterTab = 'todos' | 'produccion' | 'ventas' | 'administrativo' | 'diseño';
+type FilterTab = 'produccion' | 'administrativo';
 type ModalType = 'trabajador' | null;
 
 function Trabajadores() {
@@ -14,9 +14,12 @@ function Trabajadores() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTrabajador, setSelectedTrabajador] = useState<TrabajadorItemType | null>(null);
   const [itemsVisible, setItemsVisible] = useState(true);
-  const [activeTab, setActiveTab] = useState<FilterTab>('todos');
+  const [activeTab, setActiveTab] = useState<FilterTab>('produccion');
   const [transitionDirection, setTransitionDirection] = useState<'left' | 'right'>('right');
-  const [prevTab, setPrevTab] = useState<FilterTab>('todos');
+  const [prevTab, setPrevTab] = useState<FilterTab>('produccion');
+  
+  // State for selected workers
+  const [selectedTrabajadores, setSelectedTrabajadores] = useState<Set<string>>(new Set());
   
   // Referencia para guardar el último término de búsqueda que se envió a la API
   const lastSearchTermRef = useRef<string>('');
@@ -167,21 +170,22 @@ function Trabajadores() {
       }
       
       /* Estilo para el scrollbar personalizado */
-      .apple-scrollbar::-webkit-scrollbar {
+      .custom-scrollbar::-webkit-scrollbar {
         width: 8px;
       }
       
-      .apple-scrollbar::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      
-      .apple-scrollbar::-webkit-scrollbar-thumb {
-        background-color: rgba(0, 0, 0, 0.2);
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: #f1f1f1;
         border-radius: 4px;
       }
       
-      .apple-scrollbar::-webkit-scrollbar-thumb:hover {
-        background-color: rgba(0, 0, 0, 0.3);
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background-color: #c1c1c1;
+        border-radius: 4px;
+      }
+      
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background-color: #a8a8a8;
       }
     `;
     
@@ -243,7 +247,7 @@ function Trabajadores() {
   // Manejar el cambio de pestaña
   const handleTabChange = useCallback((tab: FilterTab) => {
     // Establecer la dirección de la transición
-    const tabs: FilterTab[] = ['todos', 'produccion', 'ventas', 'administrativo', 'diseño'];
+    const tabs: FilterTab[] = ['produccion', 'administrativo'];
     const currentIndex = tabs.indexOf(activeTab);
     const newIndex = tabs.indexOf(tab);
     
@@ -294,23 +298,129 @@ function Trabajadores() {
   
   // Filtrar trabajadores según la pestaña activa
   const getFilteredTrabajadores = useCallback(() => {
-    if (activeTab === 'todos') return trabajadores;
-    
-    return trabajadores.filter(trabajador => trabajador.tipo === activeTab);
+    // Always filter by the active tab
+    // Also filter out any residual unwanted types that might still be in the data
+    return trabajadores.filter(t => 
+      t.tipo === activeTab && 
+      !((t.tipo as string) === 'diseno' || 
+        (t.tipo as string) === 'diseño' || 
+        (t.tipo as string) === 'ventas')
+    );
   }, [trabajadores, activeTab]);
   
   // Preparar los trabajadores para mostrar
   const trabajadorItems: TrabajadorItemType[] = getFilteredTrabajadores()
-    .filter(trabajador => !!trabajador.id)
+    .filter(trabajador => !!trabajador.id) // Ensure ID exists
     .map(trabajador => ({
       ...trabajador,
-      type: 'trabajador',
-      id: trabajador.id!,
-      tipo: trabajador.tipo === 'diseno' ? 'diseño' : trabajador.tipo
+      type: 'trabajador', // Static type for the component
+      id: trabajador.id!, // ID is confirmed by the filter above
+      // Type is now guaranteed to be one of the allowed FilterTab values (excluding 'todos')
+      // So direct assignment is safe
+      tipo: trabajador.tipo as 'produccion' | 'administrativo' // Cast needed as TS cannot fully infer from filters
     }));
   
+  // Handle selecting/deselecting a single trabajador
+  const handleSelectTrabajador = useCallback((id: string, isSelected: boolean) => {
+    setSelectedTrabajadores(prevSelected => {
+      const newSelected = new Set(prevSelected);
+      if (isSelected) {
+        newSelected.add(id);
+      } else {
+        newSelected.delete(id);
+      }
+      return newSelected;
+    });
+  }, []);
+
+  // Handle selecting/deselecting all currently visible trabajadores
+  const handleSelectAll = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const isChecked = e.target.checked;
+    const currentVisibleIds = trabajadorItems.map(t => t.id);
+    
+    setSelectedTrabajadores(prevSelected => {
+      const newSelected = new Set(prevSelected);
+      if (isChecked) {
+        currentVisibleIds.forEach(id => newSelected.add(id));
+      } else {
+        currentVisibleIds.forEach(id => newSelected.delete(id));
+      }
+      return newSelected;
+    });
+  }, [trabajadorItems]);
+
+  // Determine if "Select All" checkbox should be checked
+  const isAllSelected = trabajadorItems.length > 0 && trabajadorItems.every(t => selectedTrabajadores.has(t.id));
+  
+  // Handler for export button
+  const handleExport = useCallback(async () => {
+    const selectedIds = Array.from(selectedTrabajadores);
+    console.log('Exporting selected trabajador IDs:', selectedIds);
+
+    // Get full data for selected workers from the original list
+    const selectedData = trabajadores.filter(t => selectedIds.includes(t.id!));
+
+    if (selectedData.length === 0) {
+      console.log('No data selected for export.');
+      // Optionally show a message to the user
+      return;
+    }
+
+    // Define headers (customize as needed)
+    const headers = [
+      'id', 'nombre', 'apellido', 'cedula', 'tipo', 'area', 
+      'salario', 'fecha_contratacion', 'correo', 'telefono', 'direccion', 
+      'especialidad', 'tipo_contrato', 'horas_trabajo', 'fecha_nacimiento'
+    ];
+
+    // Prepare data in the format needed by xlsx.utils.json_to_sheet
+    // (Array of objects where keys match headers)
+    const excelData = selectedData.map(worker => {
+      const row: Record<string, any> = {};
+      headers.forEach(header => {
+        // Handle potentially undefined fields
+        row[header] = (worker as any)[header] ?? ''; 
+      });
+      return row;
+    });
+    
+    try {
+      console.log('Sending export request to main process...');
+      // Use the exposed electronAPI from preload script
+      const result = await window.electronAPI.invoke('export-trabajadores-excel', { 
+        headers,
+        data: excelData 
+      });
+      
+      console.log('Export result from main process:', result);
+
+      if (result.success) {
+        console.log(`Export successful: ${result.message} (${result.filePath})`);
+        // Optionally show a success notification to the user
+        alert(`Exportación exitosa: ${result.message}\nGuardado en: ${result.filePath}`);
+      } else {
+        console.error(`Export failed: ${result.message}`);
+        // Optionally show an error notification to the user
+        alert(`Error en la exportación: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('Error invoking Excel export IPC:', error);
+      alert(`Error de comunicación al exportar: ${(error as Error).message}`);
+    }
+
+  }, [selectedTrabajadores, trabajadores]);
+  
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', padding: '24px', fontFamily: "'Poppins', sans-serif" }}>
+    <div style={{ 
+      position: 'relative', 
+      width: '100%', 
+      height: '100%', 
+      padding: '24px', 
+      fontFamily: "'Poppins', sans-serif",
+      overflow: 'hidden', // Contain everything within the container
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
       {/* Barra de búsqueda */}
       <div style={{ position: 'relative', marginBottom: '24px' }}>
         <div style={{ 
@@ -354,7 +464,7 @@ function Trabajadores() {
         marginBottom: '20px',
         paddingBottom: '2px'
       }}>
-        {(['todos', 'produccion', 'ventas', 'administrativo', 'diseño'] as FilterTab[]).map((tab) => (
+        {(['produccion', 'administrativo'] as FilterTab[]).map((tab) => (
           <button 
             key={tab}
             onClick={() => handleTabChange(tab)}
@@ -377,13 +487,43 @@ function Trabajadores() {
             {/* Animación de subrayado */}
             <span className={activeTab === tab ? 'tab-underline-active' : 'tab-underline'} />
             
-            {tab === 'todos' && 'Todos'}
             {tab === 'produccion' && '🛠️ Producción'}
-            {tab === 'ventas' && '🛒 Ventas'}
             {tab === 'administrativo' && '📊 Administrativo'}
-            {tab === 'diseño' && '✏️ Diseño'}
           </button>
         ))}
+      </div>
+      
+      {/* Header Row with Select All */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '10px',
+        padding: '0 8px' // Align with item padding
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <input 
+            type="checkbox"
+            checked={isAllSelected}
+            onChange={handleSelectAll}
+            disabled={trabajadorItems.length === 0}
+            style={{ cursor: 'pointer' }}
+            title={isAllSelected ? "Deseleccionar todos" : "Seleccionar todos"}
+          />
+          <label 
+            style={{ fontSize: '14px', color: '#6B7280', cursor: 'pointer' }} 
+            onClick={(e) => { 
+              const checkbox = (e.target as HTMLLabelElement).previousElementSibling;
+              if (checkbox instanceof HTMLInputElement) {
+                checkbox.click();
+              }
+            }}
+          >
+            Seleccionar Todos ({selectedTrabajadores.size} seleccionados)
+          </label>
+        </div>
+
+        {/* Placeholder for potential header actions/sorting */}
       </div>
       
       {/* Título con contador */}
@@ -398,11 +538,8 @@ function Trabajadores() {
         justifyContent: 'space-between'
       }}>
         <span>
-          {activeTab === 'todos' && 'Lista de Trabajadores'}
           {activeTab === 'produccion' && 'Trabajadores de Producción'}
-          {activeTab === 'ventas' && 'Equipo de Ventas'}
           {activeTab === 'administrativo' && 'Personal Administrativo'}
-          {activeTab === 'diseño' && 'Equipo de Diseño'}
           {!loading && trabajadorItems.length > 0 && 
             <span style={{ 
               fontSize: '14px', 
@@ -429,12 +566,17 @@ function Trabajadores() {
       {/* Lista de trabajadores con transición */}
       <div 
         style={{ 
+          height: '100%', // Fill available space
+          minHeight: '200px', // Minimum size 
           maxHeight: 'calc(100vh - 220px)', 
           overflowY: 'auto', 
           position: 'relative',
-          marginBottom: '20px'
-        }} 
-        className="apple-scrollbar"
+          marginBottom: '20px',
+          // Add custom styled scrollbar
+          scrollbarWidth: 'thin', // For Firefox
+          scrollbarColor: '#c1c1c1 #f1f1f1', // For Firefox 
+        }}
+        className="custom-scrollbar" // Add custom scrollbar class
       >
         {/* Mostrar mensaje de carga */}
         {loading && (
@@ -472,15 +614,11 @@ function Trabajadores() {
             }}>
               {searchTerm 
                 ? `No se encontraron trabajadores para "${searchTerm}"` 
-                : activeTab === 'todos'
-                  ? 'No hay trabajadores registrados. Agrega algunos usando el botón "Nuevo Trabajador".'
-                  : activeTab === 'produccion'
-                    ? 'No hay trabajadores de producción registrados.'
-                    : activeTab === 'ventas'
-                      ? 'No hay personal de ventas registrado.'
-                      : activeTab === 'administrativo'
-                        ? 'No hay personal administrativo registrado.'
-                        : 'No hay diseñadores registrados.'
+                : activeTab === 'produccion'
+                  ? 'No hay trabajadores de producción registrados.'
+                  : activeTab === 'administrativo'
+                    ? 'No hay personal administrativo registrado.'
+                    : ''
               }
             </div>
           ) : !loading && (
@@ -489,10 +627,14 @@ function Trabajadores() {
                 <div key={trabajador.id} className="trabajador-item-wrapper">
                   <TrabajadorItem
                     trabajador={trabajador}
+                    isSelected={selectedTrabajadores.has(trabajador.id)}
+                    onSelectChange={handleSelectTrabajador}
                     onViewDetails={handleViewDetails}
                   />
                 </div>
               ))}
+              {/* Espacio adicional para permitir scroll completo */}
+              <div style={{ height: '100px' }}></div>
             </div>
           )}
         </div>
@@ -501,16 +643,23 @@ function Trabajadores() {
       {/* Contenedor de botones en esquina inferior derecha */}
       <div 
         style={{
-          position: 'fixed',
+          position: 'fixed', // Keep fixed at bottom right
           bottom: '24px',
           right: '24px',
           display: 'flex',
           gap: '12px',
-          zIndex: 9999
+          zIndex: 9999,
+          // Add shadow to make buttons stand out against scroll content
+          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          padding: '8px',
+          borderRadius: '8px',
+          boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)'
         }}
       >
         {/* Botón Exportar */}
         <button 
+          onClick={handleExport}
+          disabled={selectedTrabajadores.size === 0}
           style={{
             height: '36px',
             backgroundColor: 'white',
@@ -520,55 +669,26 @@ function Trabajadores() {
             display: 'flex',
             alignItems: 'center',
             padding: '0 16px',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
+            cursor: selectedTrabajadores.size === 0 ? 'not-allowed' : 'pointer',
             color: '#1a1a1a',
             fontSize: '14px',
             fontWeight: 200,
             fontFamily: "'Poppins', sans-serif",
+            opacity: selectedTrabajadores.size === 0 ? 0.5 : 1,
           }}
           onMouseEnter={(e) => {
+            if (selectedTrabajadores.size === 0) return;
             e.currentTarget.style.transform = 'translateY(-2px)';
             e.currentTarget.style.borderColor = '#D1D5DB';
           }}
           onMouseLeave={(e) => {
+            if (selectedTrabajadores.size === 0) return;
             e.currentTarget.style.transform = 'translateY(0)';
             e.currentTarget.style.borderColor = '#E5E7EB';
           }}
         >
           <ArrowDownTrayIcon style={{ width: '20px', height: '20px', marginRight: '8px' }} />
           Exportar
-        </button>
-        
-        {/* Botón Imprimir */}
-        <button 
-          style={{
-            height: '36px',
-            backgroundColor: 'white',
-            borderRadius: '6px',
-            boxShadow: 'none',
-            border: '1px solid #E5E7EB',
-            display: 'flex',
-            alignItems: 'center',
-            padding: '0 16px',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            color: '#1a1a1a',
-            fontSize: '14px',
-            fontWeight: 200,
-            fontFamily: "'Poppins', sans-serif",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.borderColor = '#D1D5DB';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.borderColor = '#E5E7EB';
-          }}
-        >
-          <PrinterIcon style={{ width: '20px', height: '20px', marginRight: '8px' }} />
-          Imprimir
         </button>
         
         {/* Botón Nuevo Trabajador */}

@@ -1,22 +1,44 @@
 "use strict";
 const electron = require("electron");
-electron.contextBridge.exposeInMainWorld("ipcRenderer", {
-  on(...args) {
-    const [channel, listener] = args;
-    return electron.ipcRenderer.on(channel, (event, ...args2) => listener(event, ...args2));
+const validChannels = [
+  "open-folder-dialog",
+  "execute-sql",
+  "save-settings",
+  "load-settings",
+  "process-image-ocr",
+  "export-trabajadores-excel"
+  // Add channel for Excel export
+];
+electron.contextBridge.exposeInMainWorld("electronAPI", {
+  // Invoke methods (Renderer -> Main -> Renderer)
+  invoke: (channel, ...args) => {
+    if (validChannels.includes(channel)) {
+      return electron.ipcRenderer.invoke(channel, ...args);
+    }
+    throw new Error(`Invalid invoke channel: ${channel}`);
   },
-  off(...args) {
-    const [channel, ...omit] = args;
-    return electron.ipcRenderer.off(channel, ...omit);
+  // Send methods (Renderer -> Main)
+  send: (channel, ...args) => {
+    if (validChannels.includes(channel)) {
+      electron.ipcRenderer.send(channel, ...args);
+    } else {
+      throw new Error(`Invalid send channel: ${channel}`);
+    }
   },
-  send(...args) {
-    const [channel, ...omit] = args;
-    return electron.ipcRenderer.send(channel, ...omit);
+  // Receive methods (Main -> Renderer)
+  on: (channel, func) => {
+    if (validChannels.includes(channel)) {
+      electron.ipcRenderer.on(channel, (event, ...args) => func(...args));
+    } else {
+      throw new Error(`Invalid receive channel: ${channel}`);
+    }
   },
-  invoke(...args) {
-    const [channel, ...omit] = args;
-    return electron.ipcRenderer.invoke(channel, ...omit);
+  // Remove listener
+  removeListener: (channel, func) => {
+    if (validChannels.includes(channel)) {
+      electron.ipcRenderer.removeListener(channel, func);
+    } else {
+      throw new Error(`Invalid removeListener channel: ${channel}`);
+    }
   }
-  // You can expose other APTs you need here.
-  // ...
 });

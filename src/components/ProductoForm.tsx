@@ -1,20 +1,69 @@
-import { useState, useRef } from 'react';
-import { ArrowLeftIcon, PhotoIcon, SparklesIcon, DocumentIcon, ChatBubbleBottomCenterTextIcon } from '@heroicons/react/24/outline';
+import { useState, useRef, useEffect } from 'react';
+import { ArrowLeftIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { useInventario } from '../lib/hooks';
 import { uploadImageToSupabase, generateQRCode } from '../lib/hooks';
 import QRCodeModal from './QRCodeModal';
 import { supabase } from '../lib/supabase';
 
+// Estilo global para aplicar Helvetica Neue a todo el componente
+const globalStyles = {
+  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+};
+
+// Estilos para placeholder más gris
+const placeholderColor = '#a0a0a0';
+
+// CSS para los placeholders y animaciones de foco
+const customStyles = `
+  ::placeholder {
+    color: ${placeholderColor};
+    opacity: 1;
+  }
+  
+  input, select, textarea {
+    transition: border 0.2s ease-in-out, box-shadow 0.2s ease-in-out, transform 0.1s ease-in-out;
+  }
+  
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: #4F46E5 !important;
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+    transform: translateY(-1px);
+  }
+`;
+
+// Estilos para opciones y selects vacíos
+const selectStyle = (hasValue: boolean) => ({
+  color: hasValue ? 'inherit' : placeholderColor
+});
+
+interface Material {
+  id: number;
+  nombre: string;
+}
+
+// Nueva interfaz para herramientas
+interface Herramienta {
+  id: number;
+  nombre: string;
+}
+
+// Añadir interfaz para tallas
+interface Talla {
+  numero: string;
+  stock: string;
+  stockMinimo: string;
+}
+
 // Tipos para productos
 export interface ProductoForm {
   nombre: string;
   precio: string;
-  stock: string;
-  stockMinimo: string;
   categoria: string;
   descripcion: string;
-  materiales: string;
-  tallas: string;
+  materiales: string[]; // Array de strings
+  herramientas: string[]; // Nuevo campo para herramientas
+  tallas: Talla[];
   colores: string;
   tiempoFabricacion: string;
   destacado: boolean;
@@ -28,29 +77,15 @@ interface ProductoFormProps {
 }
 
 function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const pdfInputRef = useRef<HTMLInputElement>(null);
   const formImageInputRef = useRef<HTMLInputElement>(null);
-  const [loadingAI, setLoadingAI] = useState(false);
-  const [showAIOptions, setShowAIOptions] = useState(false);
-  const [showTextInput, setShowTextInput] = useState(false);
-  const [rawText, setRawText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [processingImageWithOCR, setProcessingImageWithOCR] = useState(false);
-  const [processingPDFWithOCR, setProcessingPDFWithOCR] = useState(false);
-  const [processingText, setProcessingText] = useState(false);
   
   // Estados para el QR
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [showQrModal, setShowQrModal] = useState(false);
   const [isQrModalClosing, setIsQrModalClosing] = useState(false);
   const [savedItemId, setSavedItemId] = useState<string>('');
-  
-  // Estado para el texto extraído del PDF/imagen
-  const [extractedText, setExtractedText] = useState<string>('');
-  const [showExtractedText, setShowExtractedText] = useState(false);
-  const [isExtractedTextClosing, setIsExtractedTextClosing] = useState(false);
   
   // Usamos el hook personalizado para inventario
   const { addInventarioItem } = useInventario();
@@ -62,12 +97,11 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
   const [productoForm, setProductoForm] = useState<ProductoForm>({
     nombre: '',
     precio: '',
-    stock: '',
-    stockMinimo: '',
     categoria: '',
     descripcion: '',
-    materiales: '',
-    tallas: '',
+    materiales: [], 
+    herramientas: [], 
+    tallas: [],
     colores: '',
     tiempoFabricacion: '',
     destacado: false
@@ -78,6 +112,78 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
 
   // Estado para previsualización de imagen
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  const [availableMaterials, setAvailableMaterials] = useState<Material[]>([]);
+  const [materialsLoading, setMaterialsLoading] = useState<boolean>(true);
+  const [materialsError, setMaterialsError] = useState<string | null>(null);
+
+  // Estado para herramientas
+  const [availableHerramientas, setAvailableHerramientas] = useState<Herramienta[]>([]);
+  const [herramientasLoading, setHerramientasLoading] = useState<boolean>(true);
+  const [herramientasError, setHerramientasError] = useState<string | null>(null);
+
+  // Estado para nueva talla que se está agregando
+  const [nuevaTalla, setNuevaTalla] = useState<Talla>({
+    numero: '',
+    stock: '',
+    stockMinimo: ''
+  });
+
+  // Fetch materials on component mount
+  useEffect(() => {
+    async function fetchMaterials() {
+      setMaterialsLoading(true);
+      setMaterialsError(null);
+      try {
+        const { data, error } = await supabase
+          .from('materiales')
+          .select('id, nombre');
+
+        if (error) {
+          throw error;
+        }
+
+        if (data) {
+          setAvailableMaterials(data as Material[]);
+        }
+      } catch (error: any) {
+        console.error('Error fetching materials:', error);
+        setMaterialsError('No se pudieron cargar los materiales. Intente de nuevo.');
+      } finally {
+        setMaterialsLoading(false);
+      }
+    }
+
+    fetchMaterials();
+  }, []);
+
+  // Fetch herramientas on component mount
+  useEffect(() => {
+    async function fetchHerramientas() {
+      setHerramientasLoading(true);
+      setHerramientasError(null);
+      try {
+        const { data, error } = await supabase
+          .from('herramientas')
+          .select('id, nombre');
+
+        if (error) {
+          throw error;
+        }
+
+        if (data) {
+          setAvailableHerramientas(data as Herramienta[]);
+        }
+      } catch (error: any) {
+        console.error('Error fetching herramientas:', error);
+        setHerramientasError('No se pudieron cargar las herramientas. Intente de nuevo.');
+      } finally {
+        setHerramientasLoading(false);
+      }
+    }
+
+    fetchHerramientas();
+  }, []);
 
   const handleProductoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -103,309 +209,62 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
     }));
   };
 
-  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Para análisis OCR, NO mostramos la imagen en el formulario
-      // No actualizar setImagePreview
-      
-      // Indicar que estamos procesando la imagen
-      setLoadingAI(true);
-      setProcessingImageWithOCR(true);
-      
-      try {
-        // Guardar temporalmente el archivo para procesarlo con Python OCR
-        const tempPath = await saveTemporaryFile(file);
-        
-        if (!tempPath) {
-          throw new Error('No se pudo guardar la imagen temporalmente');
-        }
-        
-        console.log('Enviando imagen para procesamiento OCR:', tempPath);
-        
-        // Llamar al procesamiento OCR usando IPC
-        const result = await window.ipcRenderer.invoke('process-producto-ocr', tempPath);
-        
-        console.log('Resultado del OCR de imagen:', result);
-        
-        if (result) {
-          // Actualizar el formulario con los datos extraídos preservando valores existentes
-          setProductoForm(prev => ({
-            ...prev,
-            nombre: prev.nombre || result.nombre || '',
-            precio: prev.precio || result.precio || '',
-            stock: prev.stock || result.stock || '',
-            stockMinimo: prev.stockMinimo || result.stockMinimo || '',
-            categoria: prev.categoria || result.categoria || '',
-            descripcion: prev.descripcion || result.descripcion || '',
-            materiales: prev.materiales || result.materiales || '',
-            tallas: prev.tallas || result.tallas || '',
-            colores: prev.colores || result.colores || '',
-            tiempoFabricacion: prev.tiempoFabricacion || result.tiempoFabricacion || '',
-            destacado: prev.destacado || result.destacado || false
-          }));
-          
-          // Mostrar el texto extraído en su formato original JSON
-          if (typeof result === 'string') {
-            setExtractedText(result);
-          } else {
-            setExtractedText(JSON.stringify(result, null, 2));
-          }
-          
-          setShowExtractedText(true);
-        }
-      } catch (error: any) {
-        console.error('Error al procesar la imagen:', error);
-        
-        // Mensaje de error más detallado
-        let errorMessage = error.message || 'Error desconocido';
-        
-        // Verificar si es un error específico de la ruta o codificación
-        if (errorMessage.includes('unicodeescape') || errorMessage.includes('path')) {
-          errorMessage = 'Error en la codificación de caracteres. Por favor contacte al soporte técnico.';
-        } else if (errorMessage.includes('OCR') || errorMessage.includes('tesseract')) {
-          errorMessage = 'Error en el procesamiento OCR. Verifique que la imagen tenga buena calidad.';
-        }
-        
-        // Crear datos para mostrar el error
-        const errorData = {
-          error: true,
-          nombre: "Error de procesamiento",
-          descripcion: "No se pudo analizar la imagen",
-          message: `Error: ${errorMessage}`
-        };
-        
-        // Mostrar información sobre el error
-        setExtractedText(JSON.stringify(errorData, null, 2));
-        setShowExtractedText(true);
-        
-        // Mostrar mensaje de error en la consola para diagnóstico
-        console.error('Error detallado:', error);
-      } finally {
-        setLoadingAI(false);
-        setProcessingImageWithOCR(false);
-      }
-    }
-  };
-
-  const handlePdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setLoadingAI(true);
-      setShowAIOptions(false);
-      setProcessingPDFWithOCR(true);
-      
-      try {
-        // Guardar temporalmente el archivo PDF para procesarlo con Python
-        const tempPath = await saveTemporaryFile(file);
-        
-        if (!tempPath) {
-          throw new Error('No se pudo guardar el archivo temporalmente');
-        }
-        
-        console.log('Enviando PDF para procesamiento OCR:', tempPath);
-        
-        // Llamar al procesamiento OCR usando IPC
-        const result = await window.ipcRenderer.invoke('process-producto-ocr', tempPath);
-        
-        console.log('Resultado del OCR:', result);
-        
-        if (result) {
-          // Actualizar el formulario con los datos extraídos preservando valores existentes
-          setProductoForm(prev => ({
-            ...prev,
-            nombre: prev.nombre || result.nombre || '',
-            precio: prev.precio || result.precio || '',
-            stock: prev.stock || result.stock || '',
-            stockMinimo: prev.stockMinimo || result.stockMinimo || '',
-            categoria: prev.categoria || result.categoria || '',
-            descripcion: prev.descripcion || result.descripcion || '',
-            materiales: prev.materiales || result.materiales || '',
-            tallas: prev.tallas || result.tallas || '',
-            colores: prev.colores || result.colores || '',
-            tiempoFabricacion: prev.tiempoFabricacion || result.tiempoFabricacion || '',
-            destacado: prev.destacado || result.destacado || false
-          }));
-          
-          // Mostrar el texto extraído en su formato original JSON
-          if (typeof result === 'string') {
-            setExtractedText(result);
-          } else {
-            setExtractedText(JSON.stringify(result, null, 2));
-          }
-          
-          setShowExtractedText(true);
-        } else {
-          throw new Error('No se pudieron extraer datos del PDF');
-        }
-      } catch (error: any) {
-        console.error('Error al procesar el PDF:', error);
-        
-        // Mensaje de error más detallado
-        let errorMessage = error.message || 'Error desconocido';
-        
-        // Verificar si es un error específico de la ruta o codificación
-        if (errorMessage.includes('unicodeescape') || errorMessage.includes('path')) {
-          errorMessage = 'Error en la codificación de caracteres. Por favor contacte al soporte técnico.';
-        } else if (errorMessage.includes('PDF') || errorMessage.includes('PyMuPDF')) {
-          errorMessage = 'Error en el procesamiento del PDF. El archivo podría estar dañado o protegido.';
-        } else if (errorMessage.includes('OCR') || errorMessage.includes('tesseract')) {
-          errorMessage = 'Error en el procesamiento OCR. Verifique que el PDF contenga texto legible.';
-        }
-        
-        // Crear datos para mostrar el error
-        const errorData = {
-          error: true,
-          nombre: "Error de procesamiento",
-          descripcion: "No se pudo analizar el PDF",
-          message: `Error: ${errorMessage}`
-        };
-        
-        // Mostrar información sobre el error
-        setExtractedText(JSON.stringify(errorData, null, 2));
-        setShowExtractedText(true);
-        
-        // Mostrar mensaje de error en la consola para diagnóstico
-        console.error('Error detallado:', error);
-      } finally {
-        setLoadingAI(false);
-        setProcessingPDFWithOCR(false);
-      }
-    }
-  };
-
-  // Función para guardar temporalmente un archivo y obtener su ruta
-  const saveTemporaryFile = async (file: File): Promise<string | null> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        try {
-          // Generar un nombre único para el archivo temporal
-          const tempFileName = `temp_${Date.now()}_${file.name}`;
-          
-          // Solicitar al proceso principal que guarde el archivo
-          const tempPath = await window.ipcRenderer.invoke(
-            'save-temp-file', 
-            {
-              fileName: tempFileName,
-              data: event.target?.result
-            }
-          );
-          
-          resolve(tempPath);
-        } catch (error) {
-          console.error('Error al guardar archivo temporal:', error);
-          reject(error);
-        }
-      };
-      reader.onerror = () => {
-        reject(new Error('No se pudo leer el archivo'));
-      };
-      reader.readAsArrayBuffer(file);
-    });
-  };
-
-  const handleRawTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setRawText(e.target.value);
-  };
-
-  const processRawText = async () => {
-    if (rawText.trim() === '') {
-      return;
-    }
-    
-    setLoadingAI(true);
-    setShowTextInput(false);
-    setShowAIOptions(false);
-    setProcessingText(true);
-    
-    try {
-      console.log('Enviando texto para análisis con IA:', rawText);
-      
-      // Llamar al servicio de IA para procesar el texto directamente
-      const result = await window.ipcRenderer.invoke('process-producto-text', rawText);
-      
-      console.log('Resultado del análisis de texto:', result);
-      
-      if (result) {
-        // Actualizar el formulario con los datos extraídos preservando valores existentes
-        setProductoForm(prev => ({
-          ...prev,
-          nombre: prev.nombre || result.nombre || '',
-          precio: prev.precio || result.precio || '',
-          stock: prev.stock || result.stock || '',
-          stockMinimo: prev.stockMinimo || result.stockMinimo || '',
-          categoria: prev.categoria || result.categoria || '',
-          descripcion: prev.descripcion || result.descripcion || '',
-          materiales: prev.materiales || result.materiales || '',
-          tallas: prev.tallas || result.tallas || '',
-          colores: prev.colores || result.colores || '',
-          tiempoFabricacion: prev.tiempoFabricacion || result.tiempoFabricacion || '',
-          destacado: prev.destacado || result.destacado || false
-        }));
-        
-        // Mostrar el texto extraído en su formato original JSON
-        if (typeof result === 'string') {
-          setExtractedText(result);
-        } else {
-          setExtractedText(JSON.stringify(result, null, 2));
-        }
-        
-        setShowExtractedText(true);
-      } else {
-        throw new Error('No se pudieron extraer datos del texto');
-      }
-    } catch (error: any) {
-      console.error('Error al procesar el texto:', error);
-      
-      // Mensaje de error más detallado
-      let errorMessage = error.message || 'Error desconocido';
-      
-      // Verificar si es un error específico de la ruta o codificación
-      if (errorMessage.includes('unicodeescape') || errorMessage.includes('path')) {
-        errorMessage = 'Error en la codificación de caracteres. Por favor contacte al soporte técnico.';
-      }
-      
-      // Crear datos para mostrar el error
-      const errorData = {
-        error: true,
-        nombre: "Error de procesamiento",
-        descripcion: "No se pudo analizar el texto con IA",
-        message: `Error: ${errorMessage}`
-      };
-      
-      // Mostrar información sobre el error
-      setExtractedText(JSON.stringify(errorData, null, 2));
-      setShowExtractedText(true);
-      
-      // Mostrar mensaje de error en la consola para diagnóstico
-      console.error('Error detallado:', error);
-    } finally {
-      setRawText('');
-      setLoadingAI(false);
-      setProcessingText(false);
-    }
-  };
-
-  const openTextInput = () => {
-    setShowTextInput(true);
-    setShowAIOptions(false);
-  };
-
-  const closeTextInput = () => {
-    setShowTextInput(false);
-  };
-
-  const triggerFileInput = () => {
-    fileInputRef.current?.click();
-  };
-
-  const triggerPdfInput = () => {
-    pdfInputRef.current?.click();
-  };
-
   const triggerFormImageInput = () => {
     formImageInputRef.current?.click();
+  };
+
+  // Manejador para cambios en nueva talla
+  const handleNuevaTallaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setNuevaTalla(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  // Función para agregar nueva talla
+  const agregarTalla = () => {
+    // Validar que la talla no esté vacía
+    if (!nuevaTalla.numero.trim()) {
+      return;
+    }
+
+    // Verificar que la talla no esté duplicada
+    if (productoForm.tallas.some(t => t.numero === nuevaTalla.numero)) {
+      // Mostrar error o no hacer nada
+      return;
+    }
+
+    // Agregar nueva talla
+    setProductoForm(prev => ({
+      ...prev,
+      tallas: [...prev.tallas, { ...nuevaTalla }]
+    }));
+
+    // Limpiar formulario de nueva talla
+    setNuevaTalla({
+      numero: '',
+      stock: '',
+      stockMinimo: ''
+    });
+
+    // Limpiar posibles errores
+    if (formErrors.tallas) {
+      setFormErrors(prev => ({
+        ...prev,
+        tallas: ''
+      }));
+    }
+  };
+
+  // Función para eliminar una talla
+  const eliminarTalla = (index: number) => {
+    const nuevasTallas = [...productoForm.tallas];
+    nuevasTallas.splice(index, 1);
+    setProductoForm(prev => ({
+      ...prev,
+      tallas: nuevasTallas
+    }));
   };
 
   const validateForm = (): boolean => {
@@ -415,12 +274,31 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
     if (!productoForm.nombre.trim()) errors.nombre = 'El nombre es obligatorio';
     if (!productoForm.precio.trim()) errors.precio = 'El precio es obligatorio';
     
-    // Validar que stock y precio sean números
-    if (productoForm.stock && !/^\d+$/.test(productoForm.stock)) 
-      errors.stock = 'El stock debe ser un número';
-    
+    // Validar que el precio sea número
     if (productoForm.precio && !/^\d+(\.\d{1,2})?$/.test(productoForm.precio)) 
-      errors.precio = 'El precio debe ser un número válido';
+      errors.precio = 'El precio debe ser un número con hasta 2 decimales';
+    
+    // Validar tiempo de fabricación como número entero
+    if (productoForm.tiempoFabricacion && !/^\d+$/.test(productoForm.tiempoFabricacion)) 
+      errors.tiempoFabricacion = 'El tiempo de fabricación debe ser un número entero de horas';
+    
+    // Validar tallas
+    if (productoForm.tallas.length === 0) {
+      errors.tallas = 'Debe agregar al menos una talla';
+    } else {
+      // Verificar que stock sea número en cada talla
+      for (const talla of productoForm.tallas) {
+        if (talla.stock && !/^\d+$/.test(talla.stock)) {
+          errors.tallas = 'El stock debe ser un número entero en todas las tallas';
+          break;
+        }
+        
+        if (talla.stockMinimo && !/^\d+$/.test(talla.stockMinimo)) {
+          errors.tallas = 'El stock mínimo debe ser un número entero en todas las tallas';
+          break;
+        }
+      }
+    }
     
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -437,175 +315,74 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
     setServerError(null);
     
     try {
-      // Transformar los campos a formato snake_case para la base de datos
+      // Convertir valores a tipos correctos para la base de datos
       const productoData = {
         nombre: productoForm.nombre,
-        precio: productoForm.precio,
-        stock: productoForm.stock,
-        stock_minimo: productoForm.stockMinimo,
+        precio: parseFloat(productoForm.precio),
         categoria: productoForm.categoria,
         descripcion: productoForm.descripcion,
-        materiales: productoForm.materiales,
-        tallas: productoForm.tallas,
+        materiales: productoForm.materiales, // Array será convertido a JSONB
+        herramientas: productoForm.herramientas, // Array será convertido a JSONB
+        tallas: productoForm.tallas.map(talla => ({
+          numero: talla.numero,
+          stock: parseInt(talla.stock) || 0,
+          stockMinimo: parseInt(talla.stockMinimo) || 0
+        })), // Array de objetos será convertido a JSONB
         colores: productoForm.colores,
-        tiempo_fabricacion: productoForm.tiempoFabricacion,
+        tiempo_fabricacion: parseInt(productoForm.tiempoFabricacion) || 0,
         destacado: productoForm.destacado,
         imagen_url: productoForm.imagenUrl
       };
       
-      // Usar el hook de inventario para agregar el producto
-      // El código QR se genera y guarda automáticamente dentro del hook
-      const result = await addInventarioItem('producto', productoData);
+      // Insertar directamente en la tabla productos_table
+      const { data, error } = await supabase
+        .from('productos_table')
+        .insert(productoData)
+        .select()
+        .single();
       
-      if (result && result.id) {
-        console.log('Producto guardado con éxito:', result);
+      if (error) {
+        throw error;
+      }
+      
+      if (data) {
+        console.log('Producto guardado con éxito:', data);
         
-        // El QR ya fue generado y guardado en el hook, solo necesitamos obtenerlo para mostrar
-        // Si el resultado tiene la URL del QR, usamos esa
-        if (result.qr_code) {
-          setQrCodeUrl(result.qr_code);
-        } else {
-          // Si por alguna razón no tiene el QR, generamos uno solo para mostrar
-          // pero no lo guardamos de nuevo
-          const qrCode = await generateQRCode('producto', result.id);
-          setQrCodeUrl(qrCode);
+        // Generar QR code para el producto
+        const qrCode = await generateQRCode('producto', data.id);
+        
+        // Actualizar el registro con el código QR
+        if (qrCode) {
+          const { error: updateError } = await supabase
+            .from('productos_table')
+            .update({ qr_code: qrCode })
+            .eq('id', data.id);
+          
+          if (updateError) {
+            console.error('Error al guardar el código QR:', updateError);
+          }
         }
         
-        setSavedItemId(result.id);
-        
-        // Mostrar modal con el código QR
-        setShowQrModal(true);
+        // Cerrar el formulario sin mostrar el modal de QR
+        onClose();
       } else {
-        setServerError('No se pudo guardar el producto. Intente nuevamente.');
+        throw new Error('No se pudo guardar el producto');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al guardar el producto:', error);
       setServerError('Ocurrió un error al guardar. Intente nuevamente.');
+      if (error.message) {
+        console.error('Mensaje de error:', error.message);
+      }
+      if (error.details) {
+        console.error('Detalles del error:', error.details);
+      }
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Función para cerrar el modal QR
-  const handleCloseQrModal = () => {
-    setIsQrModalClosing(true);
-    setTimeout(() => {
-      setShowQrModal(false);
-      setIsQrModalClosing(false);
-      // Cerrar el formulario después de mostrar el QR
-      onClose();
-    }, 300);
-  };
-
-  // Función para cerrar el modal de texto extraído
-  const closeExtractedTextModal = () => {
-    setIsExtractedTextClosing(true);
-    setTimeout(() => {
-      setShowExtractedText(false);
-      setIsExtractedTextClosing(false);
-    }, 300);
-  };
-
-  // Función para formatear los datos extraídos para mostrarlos de manera más amigable
-  const formatExtractedDataForDisplay = (jsonText: string) => {
-    try {
-      // Intentar parsear el JSON
-      const result = JSON.parse(jsonText);
-      
-      // Verificar si es un error o datos de ejemplo
-      if (result.nota && (result.nota.includes("ERROR") || result.nota.includes("ATENCIÓN"))) {
-        return jsonText;
-      }
-      
-      // Crear un objeto con los datos formateados para mostrar
-      const formattedData = {
-        "Información extraída del documento": {
-          "Datos principales": {
-            "Nombre": result.nombre || "",
-            "Precio": result.precio || "",
-            "Categoría": result.categoria || ""
-          },
-          "Inventario": {
-            "Stock actual": result.stock || "",
-            "Stock mínimo": result.stockMinimo || "",
-            "Destacado": result.destacado ? "Sí" : "No",
-            "Tiempo de fabricación": result.tiempoFabricacion || ""
-          },
-          "Variantes": {
-            "Tallas disponibles": result.tallas || "",
-            "Colores disponibles": result.colores || ""
-          },
-          "Descripción": result.descripcion || "",
-          "Materiales": {
-            "Materiales": result.materiales || ""
-          }
-        }
-      };
-      
-      return JSON.stringify(formattedData, null, 2);
-    } catch (error) {
-      console.error("Error al formatear los datos extraídos:", error);
-      return jsonText || 'No se pudo extraer texto del documento.';
-    }
-  };
-
-  // Gestionar el menú de opciones de IA
-  const toggleAIOptions = () => {
-    setShowAIOptions(!showAIOptions);
-  };
-
-  // Simular completado con IA desde una foto
-  const completeWithAIFromImage = () => {
-    setShowAIOptions(false);
-    triggerFileInput();
-  };
-
-  // Simular completado con IA desde un PDF
-  const completeWithAIFromPdf = () => {
-    setShowAIOptions(false);
-    triggerPdfInput();
-  };
-
-  // Completar con IA automáticamente
-  const completeWithAI = () => {
-    setLoadingAI(true);
-    setShowAIOptions(false);
-    
-    // Simulación de carga - en producción, aquí iría una llamada a la API de IA
-    setTimeout(() => {
-      setProductoForm(prev => ({
-        ...prev,
-        nombre: prev.nombre || 'Zapatos Oxford Clásicos',
-        precio: prev.precio || '120.00',
-        stock: prev.stock || '25',
-        stockMinimo: prev.stockMinimo || '8',
-        categoria: prev.categoria || 'Calzado formal',
-        descripcion: prev.descripcion || 'Zapatos Oxford de cuero genuino con acabado brillante. Diseño clásico y elegante con puntera refinada. Plantilla acolchada para mayor comodidad. Fabricación artesanal con materiales de primera calidad.',
-        materiales: prev.materiales || 'Cuero genuino, suela de goma, forro interior de piel, plantilla acolchada.',
-        tallas: prev.tallas || '39, 40, 41, 42, 43, 44',
-        colores: prev.colores || 'Negro, Marrón oscuro',
-        tiempoFabricacion: prev.tiempoFabricacion || '10-14 días',
-        destacado: prev.destacado !== undefined ? prev.destacado : true
-      }));
-      
-      setLoadingAI(false);
-    }, 1500);
-  };
-
-  // Opciones de categorías para el select
-  const categorias = [
-    'Zapatos de hombre',
-    'Zapatos de mujer',
-    'Zapatos infantiles',
-    'Botas',
-    'Sandalias',
-    'Calzado deportivo',
-    'Calzado formal',
-    'Calzado de trabajo',
-    'Accesorios'
-  ];
-
-  // Función para subir una imagen para el formulario (no para OCR)
+  // Función para subir una imagen para el formulario
   const handleFormImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -626,7 +403,6 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
             imagenUrl: imageUrl
           }));
         } else {
-          // Si falla, aún podemos usar la URL local para la vista previa
           console.error('No se pudo subir la imagen a Supabase');
         }
       } catch (error) {
@@ -637,11 +413,40 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
     }
   };
 
+  const handleMaterialChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
+    setProductoForm(prev => ({
+      ...prev,
+      materiales: selectedOptions
+    }));
+     // Clear potential previous error for this field if needed
+     if (formErrors.materiales) {
+        setFormErrors(prev => ({
+          ...prev,
+          materiales: ''
+        }));
+      }
+  };
+
+  // Categorías de productos
+  const categorias = [
+    'Caballero',
+    'Dama',
+    'Niños',
+    'Unisex',
+    'Deportivo',
+    'Formal',
+    'Casual',
+    'Botas',
+    'Sandalias',
+    'Zapatos'
+  ];
+
   return (
     <div 
       style={{
         backgroundColor: 'white',
-        borderRadius: '8px',
+        borderRadius: '5px',
         padding: '24px',
         width: '820px',
         maxWidth: '95%',
@@ -652,344 +457,39 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
         opacity: isClosing ? 0 : 1,
         transition: 'all 0.3s ease-in-out',
         animation: isClosing ? '' : 'modalAppear 0.3s ease-out forwards',
-        fontFamily: "'Poppins', sans-serif",
+        fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       }}
       className="apple-scrollbar"
+      aria-labelledby="producto-form-title"
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              marginRight: '12px',
-              borderRadius: '8px',
-              padding: '4px',
-            }}
-          >
-            <ArrowLeftIcon style={{ width: '20px', height: '20px', color: '#666' }} />
-          </button>
-          <h2 style={{ fontSize: '20px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>Agregar producto</h2>
-        </div>
-
-        <div style={{ position: 'relative' }}>
-          <button
-            onClick={toggleAIOptions}
-            disabled={loadingAI}
-            style={{
-              display: 'flex', 
-              alignItems: 'center', 
-              backgroundColor: 'white',
-              color: '#4F46E5',
-              border: '1px solid #e0e0e0',
-              borderRadius: '8px',
-              padding: '8px 12px',
-              fontSize: '13px',
-              fontWeight: 500,
-              cursor: loadingAI ? 'default' : 'pointer',
-              opacity: loadingAI ? 0.7 : 1,
-              transition: 'all 0.2s ease',
-              height: '36px',
-            }}
-            onMouseEnter={(e) => !loadingAI && (e.currentTarget.style.transform = 'translateY(-2px)')}
-            onMouseLeave={(e) => !loadingAI && (e.currentTarget.style.transform = 'translateY(0)')}
-          >
-            <SparklesIcon style={{ width: '16px', height: '16px', marginRight: '6px', color: '#4F46E5' }} />
-            {loadingAI ? 'Generando...' : 'Completar con IA'}
-          </button>
-          
-          {/* Mensaje de procesamiento de imagen */}
-          {processingImageWithOCR && (
-            <div style={{ 
-              position: 'absolute', 
-              top: '44px', 
-              right: 0,
-              backgroundColor: '#F0F9FF',
-              border: '1px solid #BAE6FD',
-              borderRadius: '8px',
-              padding: '12px 16px',
-              width: '240px',
-              zIndex: 15,
-              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                <PhotoIcon style={{ width: '16px', height: '16px', marginRight: '8px', color: '#16A34A' }} />
-                <span style={{ fontWeight: 600, fontSize: '14px', color: '#16A34A' }}>Analizando imagen</span>
-              </div>
-              <p style={{ margin: 0, fontSize: '13px', color: '#166534' }}>
-                Extrayendo texto con OCR y procesando con IA para completar el formulario...
-              </p>
-            </div>
-          )}
-          
-          {/* Mensaje de procesamiento de PDF */}
-          {processingPDFWithOCR && (
-            <div style={{ 
-              position: 'absolute', 
-              top: '44px', 
-              right: 0,
-              backgroundColor: '#F0F9FF',
-              border: '1px solid #BAE6FD',
-              borderRadius: '8px',
-              padding: '12px 16px',
-              width: '240px',
-              zIndex: 15,
-              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                <DocumentIcon style={{ width: '16px', height: '16px', marginRight: '8px', color: '#DC2626' }} />
-                <span style={{ fontWeight: 600, fontSize: '14px', color: '#DC2626' }}>Analizando PDF</span>
-              </div>
-              <p style={{ margin: 0, fontSize: '13px', color: '#7F1D1D' }}>
-                Extrayendo texto del documento y procesando con IA para completar el formulario...
-              </p>
-            </div>
-          )}
-          
-          {/* Mensaje de procesamiento de texto */}
-          {processingText && (
-            <div style={{ 
-              position: 'absolute', 
-              top: '44px', 
-              right: 0,
-              backgroundColor: '#F0F9FF',
-              border: '1px solid #BAE6FD',
-              borderRadius: '8px',
-              padding: '12px 16px',
-              width: '240px',
-              zIndex: 15,
-              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                <ChatBubbleBottomCenterTextIcon style={{ width: '16px', height: '16px', marginRight: '8px', color: '#0EA5E9' }} />
-                <span style={{ fontWeight: 600, fontSize: '14px', color: '#0EA5E9' }}>Analizando texto</span>
-              </div>
-              <p style={{ margin: 0, fontSize: '13px', color: '#0C4A6E' }}>
-                Procesando descripción textual con IA para completar el formulario...
-              </p>
-            </div>
-          )}
-          
-          {/* Menú de opciones de IA */}
-          {showAIOptions && (
-            <div 
-              style={{
-                position: 'absolute',
-                top: '44px',
-                right: 0,
-                backgroundColor: 'white',
-                border: '1px solid #e0e0e0',
-                borderRadius: '8px',
-                width: '200px',
-                zIndex: 10,
-              }}
-            >
-              <div 
-                style={{ 
-                  padding: '10px 16px',
-                  borderBottom: '1px solid #f0f0f0',
-                  color: '#666',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  fontFamily: "'Poppins', sans-serif",
-                }}
-              >
-                SELECCIONAR FUENTE
-              </div>
-              
-              <button
-                onClick={completeWithAIFromImage}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  width: '100%',
-                  padding: '10px 16px',
-                  border: 'none',
-                  borderBottom: '1px solid #f0f0f0',
-                  backgroundColor: 'white',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-              >
-                <PhotoIcon style={{ width: '16px', height: '16px', marginRight: '10px', color: '#16A34A' }} />
-                <div>
-                  <div style={{ fontSize: '14px', color: '#333', fontFamily: "'Poppins', sans-serif" }}>Subir foto</div>
-                  <div style={{ fontSize: '12px', color: '#666', fontFamily: "'Poppins', sans-serif" }}>Extraer datos de imagen</div>
-                </div>
-              </button>
-              
-              <button
-                onClick={completeWithAIFromPdf}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  width: '100%',
-                  padding: '10px 16px',
-                  border: 'none',
-                  borderBottom: '1px solid #f0f0f0',
-                  backgroundColor: 'white',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-              >
-                <DocumentIcon style={{ width: '16px', height: '16px', marginRight: '10px', color: '#DC2626' }} />
-                <div>
-                  <div style={{ fontSize: '14px', color: '#333', fontFamily: "'Poppins', sans-serif" }}>Subir PDF</div>
-                  <div style={{ fontSize: '12px', color: '#666', fontFamily: "'Poppins', sans-serif" }}>Extraer datos de documento</div>
-                </div>
-              </button>
-              
-              <button
-                onClick={openTextInput}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  width: '100%',
-                  padding: '10px 16px',
-                  border: 'none',
-                  backgroundColor: 'white',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-              >
-                <ChatBubbleBottomCenterTextIcon style={{ width: '16px', height: '16px', marginRight: '10px', color: '#0EA5E9' }} />
-                <div>
-                  <div style={{ fontSize: '14px', color: '#333', fontFamily: "'Poppins', sans-serif" }}>Ingresar texto</div>
-                  <div style={{ fontSize: '12px', color: '#666', fontFamily: "'Poppins', sans-serif" }}>Procesar descripción textual</div>
-                </div>
-              </button>
-            </div>
-          )}
-          
-          {/* Input oculto para subir PDF */}
-          <input
-            type="file"
-            ref={pdfInputRef}
-            style={{ display: 'none' }}
-            onChange={handlePdfChange}
-            accept=".pdf"
-          />
-        </div>
-      </div>
+      <style>
+        {customStyles}
+      </style>
       
-      {/* Modal para ingresar texto */}
-      {showTextInput && (
-        <div 
+      <header style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+        <button
+          onClick={onClose}
           style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'white',
-            zIndex: 20,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
             display: 'flex',
-            flexDirection: 'column',
-            padding: '24px',
-            borderRadius: '8px',
+            alignItems: 'center',
+            marginRight: '12px',
+            borderRadius: '5px',
+            padding: '4px',
           }}
+          aria-label="Volver atrás"
         >
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
-            <button
-              onClick={closeTextInput}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                marginRight: '12px',
-                borderRadius: '8px',
-                padding: '4px',
-              }}
-            >
-              <ArrowLeftIcon style={{ width: '20px', height: '20px', color: '#666' }} />
-            </button>
-            <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>Ingresar descripción del producto</h2>
-          </div>
-          
-          <p style={{ fontSize: '14px', color: '#666', marginBottom: '16px', fontFamily: "'Poppins', sans-serif" }}>
-            Describe el producto con todos los detalles que puedas (nombre, características, tallas, colores, precio, etc.) y la IA extraerá la información para completar el formulario.
-          </p>
-          
-          <textarea
-            value={rawText}
-            onChange={handleRawTextChange}
-            placeholder="Ej: Zapatos deportivos ultraligeros para correr. Disponibles en tallas del 38 al 44 y en colores negro, azul, rojo y gris. Precio de venta 64,50€. Actualmente tenemos 48 unidades en stock. Se fabrican en 5-7 días..."
-            style={{
-              width: '100%',
-              padding: '12px',
-              borderRadius: '8px',
-              border: '1px solid #ddd',
-              fontSize: '14px',
-              fontFamily: "'Poppins', sans-serif",
-              flex: 1,
-              marginBottom: '20px',
-              resize: 'none',
-            }}
-          />
-          
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
-            <button
-              onClick={closeTextInput}
-              style={{
-                backgroundColor: 'white',
-                color: '#666',
-                border: '1px solid #e0e0e0',
-                padding: '0 24px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: 500,
-                height: '36px',
-                transition: 'all 0.2s ease',
-                display: 'flex',
-                alignItems: 'center',
-                fontFamily: "'Poppins', sans-serif",
-              }}
-            >
-              Cancelar
-            </button>
-            
-            <button
-              onClick={processRawText}
-              disabled={rawText.trim() === ''}
-              style={{
-                backgroundColor: 'white',
-                color: '#4F46E5',
-                border: '1px solid #e0e0e0',
-                padding: '0 24px',
-                borderRadius: '8px',
-                cursor: rawText.trim() === '' ? 'default' : 'pointer',
-                fontSize: '14px',
-                fontWeight: 500,
-                height: '36px',
-                opacity: rawText.trim() === '' ? 0.7 : 1,
-                transition: 'all 0.2s ease',
-                display: 'flex',
-                alignItems: 'center',
-                fontFamily: "'Poppins', sans-serif",
-              }}
-            >
-              <SparklesIcon style={{ width: '16px', height: '16px', marginRight: '6px', color: '#4F46E5' }} />
-              Procesar con IA
-            </button>
-          </div>
-        </div>
-      )}
+          <ArrowLeftIcon style={{ width: '20px', height: '20px', color: '#666' }} />
+        </button>
+        <h2 
+          id="producto-form-title"
+          style={{ fontSize: '20px', fontWeight: 400, margin: 0, fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+        >
+          Agregar producto
+        </h2>
+      </header>
       
       {/* Mostrar mensaje de error del servidor si existe */}
       {serverError && (
@@ -997,10 +497,10 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
           backgroundColor: 'rgba(220, 38, 38, 0.1)', 
           color: '#DC2626', 
           padding: '12px', 
-          borderRadius: '8px',
+          borderRadius: '5px',
           marginBottom: '16px',
           fontSize: '14px',
-          fontFamily: "'Poppins', sans-serif"
+          fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif"
         }}>
           {serverError}
         </div>
@@ -1014,7 +514,7 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
               height: '120px', 
               flexShrink: 0,
               backgroundColor: '#f0f0f0',
-              borderRadius: '8px',
+              borderRadius: '5px',
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'center',
@@ -1034,7 +534,7 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
           
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
-              <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
                 Nombre producto <span style={{ color: 'red' }}>*</span>
               </label>
               <input
@@ -1045,27 +545,20 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
                 style={{
                   width: '100%',
                   padding: '10px',
-                  borderRadius: '8px',
+                  borderRadius: '5px',
                   border: formErrors.nombre ? '1px solid red' : '1px solid #ddd',
                   fontSize: '14px',
-                  fontFamily: "'Poppins', sans-serif"
+                  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif"
                 }}
               />
               {formErrors.nombre && (
-                <p style={{ color: 'red', fontSize: '12px', margin: '4px 0 0', fontFamily: "'Poppins', sans-serif" }}>
+                <p style={{ color: 'red', fontSize: '12px', margin: '4px 0 0', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
                   {formErrors.nombre}
                 </p>
               )}
             </div>
             
             <div style={{ display: 'flex', gap: '16px', marginTop: '10px' }}>
-              <input
-                type="file"
-                ref={fileInputRef}
-                style={{ display: 'none' }}
-                onChange={handleImageChange}
-                accept="image/*"
-              />
               <input
                 type="file"
                 ref={formImageInputRef}
@@ -1081,12 +574,12 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
                   backgroundColor: 'white',
                   border: '1px solid #e0e0e0',
                   padding: '8px 16px',
-                  borderRadius: '8px',
+                  borderRadius: '5px',
                   cursor: isUploadingImage ? 'default' : 'pointer',
                   fontSize: '14px',
                   color: '#555',
                   transition: 'all 0.2s ease',
-                  fontFamily: "'Poppins', sans-serif",
+                  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
                   opacity: isUploadingImage ? 0.7 : 1,
                   display: 'flex',
                   alignItems: 'center',
@@ -1111,7 +604,7 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
                 margin: '8px 0 0', 
                 fontSize: '12px', 
                 color: '#666', 
-                fontFamily: "'Poppins', sans-serif",
+                fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
                 fontStyle: 'italic'
               }}>
                 Formatos: JPG, PNG. Máx 5MB
@@ -1122,7 +615,7 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
         
         <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
               Precio <span style={{ color: 'red' }}>*</span>
             </label>
             <input
@@ -1130,25 +623,25 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
               name="precio"
               value={productoForm.precio}
               onChange={handleProductoChange}
-              placeholder="0.00"
+              placeholder="Ej: 249.99"
               style={{
                 width: '100%',
                 padding: '10px',
-                borderRadius: '8px',
+                borderRadius: '5px',
                 border: formErrors.precio ? '1px solid red' : '1px solid #ddd',
                 fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
+                fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif"
               }}
             />
             {formErrors.precio && (
-              <p style={{ color: 'red', fontSize: '12px', margin: '4px 0 0', fontFamily: "'Poppins', sans-serif" }}>
+              <p style={{ color: 'red', fontSize: '12px', margin: '4px 0 0', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
                 {formErrors.precio}
               </p>
             )}
           </div>
           
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
               Categoría
             </label>
             <select
@@ -1158,11 +651,11 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
               style={{
                 width: '100%',
                 padding: '10px',
-                borderRadius: '8px',
+                borderRadius: '5px',
                 border: '1px solid #ddd',
                 fontSize: '14px',
                 backgroundColor: 'white',
-                fontFamily: "'Poppins', sans-serif"
+                fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif"
               }}
             >
               <option value="">Seleccionar categoría</option>
@@ -1173,91 +666,66 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
           </div>
           
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Tiempo de fabricación
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
+              Tiempo de fabricación (horas)
             </label>
-            <input
-              type="text"
-              name="tiempoFabricacion"
-              value={productoForm.tiempoFabricacion}
-              placeholder="ej: 3-5 días"
-              onChange={handleProductoChange}
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: '1px solid #ddd',
+            <div style={{ 
+              display: 'flex',
+              position: 'relative',
+              alignItems: 'center'
+            }}>
+              <input
+                type="text"
+                name="tiempoFabricacion"
+                value={productoForm.tiempoFabricacion}
+                onChange={handleProductoChange}
+                placeholder="Ej: 24"
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  paddingRight: '50px', // Espacio para el sufijo
+                  borderRadius: '5px',
+                  border: formErrors.tiempoFabricacion ? '1px solid red' : '1px solid #ddd',
+                  fontSize: '14px',
+                  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif"
+                }}
+              />
+              <span style={{ 
+                position: 'absolute',
+                right: '10px',
+                color: '#666',
                 fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            />
+                pointerEvents: 'none'
+              }}>
+                horas
+              </span>
+            </div>
+            {formErrors.tiempoFabricacion && (
+              <p style={{ color: 'red', fontSize: '12px', margin: '4px 0 0', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
+                {formErrors.tiempoFabricacion}
+              </p>
+            )}
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Stock actual
-            </label>
-            <input
-              type="text"
-              name="stock"
-              value={productoForm.stock}
-              onChange={handleProductoChange}
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: formErrors.stock ? '1px solid red' : '1px solid #ddd',
-                fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            />
-            {formErrors.stock && (
-              <p style={{ color: 'red', fontSize: '12px', margin: '4px 0 0', fontFamily: "'Poppins', sans-serif" }}>
-                {formErrors.stock}
-              </p>
-            )}
-          </div>
-          
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Stock mínimo
-            </label>
-            <input
-              type="text"
-              name="stockMinimo"
-              value={productoForm.stockMinimo}
-              onChange={handleProductoChange}
-              placeholder="Cantidad para alerta"
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: '1px solid #ddd',
-                fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            />
-          </div>
-          
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
               Destacado
             </label>
-            <div style={{ display: 'flex', alignItems: 'center', height: '41px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', height: '38px' }}>
               <input
                 type="checkbox"
                 name="destacado"
                 checked={productoForm.destacado}
                 onChange={handleCheckboxChange}
                 style={{
-                  width: '18px',
-                  height: '18px',
-                  marginRight: '8px'
+                  marginRight: '8px',
+                  width: '16px',
+                  height: '16px',
                 }}
               />
-              <span style={{ fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
+              <span style={{ fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
                 Mostrar en página principal
               </span>
             </div>
@@ -1266,28 +734,7 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
 
         <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Tallas disponibles
-            </label>
-            <input
-              type="text"
-              name="tallas"
-              value={productoForm.tallas}
-              onChange={handleProductoChange}
-              placeholder="ej: 35, 36, 37, 38, 39"
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: '1px solid #ddd',
-                fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            />
-          </div>
-          
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
               Colores disponibles
             </label>
             <input
@@ -1295,57 +742,495 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
               name="colores"
               value={productoForm.colores}
               onChange={handleProductoChange}
-              placeholder="ej: Negro, Marrón, Beige"
+              placeholder="Ej: Negro, Café, Miel"
               style={{
                 width: '100%',
                 padding: '10px',
-                borderRadius: '8px',
+                borderRadius: '5px',
                 border: '1px solid #ddd',
                 fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
+                fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif"
               }}
             />
           </div>
         </div>
         
         <div style={{ marginBottom: '24px' }}>
-          <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
+          <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
+            Tallas disponibles
+          </label>
+          
+          {/* Tallas seleccionadas */}
+          <div style={{ 
+            marginBottom: '12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}>
+            {productoForm.tallas.length === 0 ? (
+              <p style={{ 
+                color: '#888', 
+                fontStyle: 'italic',
+                fontSize: '14px',
+                margin: '0'
+              }}>No hay tallas agregadas</p>
+            ) : (
+              <div style={{ 
+                border: '1px solid #e5e7eb',
+                borderRadius: '5px',
+                padding: '12px',
+                backgroundColor: 'white',
+              }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '8px', fontWeight: 'bold', fontSize: '14px', marginBottom: '8px' }}>
+                  <div>Talla</div>
+                  <div>Stock</div>
+                  <div>Stock Mínimo</div>
+                  <div></div>
+                </div>
+                {productoForm.tallas.map((talla, index) => (
+                  <div key={`talla-${index}`} style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: '1fr 1fr 1fr auto', 
+                    gap: '8px',
+                    alignItems: 'center',
+                    padding: '8px 0',
+                    borderBottom: index < productoForm.tallas.length - 1 ? '1px solid #f0f0f0' : 'none'
+                  }}>
+                    <div>{talla.numero}</div>
+                    <div>{talla.stock}</div>
+                    <div>{talla.stockMinimo}</div>
+                    <button
+                      type="button"
+                      onClick={() => eliminarTalla(index)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: '#888',
+                        fontSize: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '4px 8px',
+                      }}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {/* Formulario para agregar nueva talla */}
+          <div style={{ 
+            border: formErrors.tallas ? '1px solid red' : '1px solid #ddd',
+            borderRadius: '5px',
+            padding: '12px',
+            backgroundColor: 'white',
+            marginBottom: '8px'
+          }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '8px', alignItems: 'end' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>Talla</label>
+                <input
+                  type="text"
+                  name="numero"
+                  value={nuevaTalla.numero}
+                  onChange={handleNuevaTallaChange}
+                  placeholder="Ej: 25"
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>Stock</label>
+                <input
+                  type="text"
+                  name="stock"
+                  value={nuevaTalla.stock}
+                  onChange={handleNuevaTallaChange}
+                  placeholder="Ej: 10"
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>Stock Mínimo</label>
+                <input
+                  type="text"
+                  name="stockMinimo"
+                  value={nuevaTalla.stockMinimo}
+                  onChange={handleNuevaTallaChange}
+                  placeholder="Ej: 2"
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={agregarTalla}
+                disabled={!nuevaTalla.numero.trim()}
+                style={{
+                  background: '#4F46E5',
+                  border: 'none',
+                  color: 'white',
+                  borderRadius: '4px',
+                  padding: '8px 16px',
+                  cursor: !nuevaTalla.numero.trim() ? 'default' : 'pointer',
+                  opacity: !nuevaTalla.numero.trim() ? 0.5 : 1,
+                  fontWeight: 'bold',
+                  fontSize: '16px',
+                  height: '37px'
+                }}
+              >
+                +
+              </button>
+            </div>
+          </div>
+          
+          {formErrors.tallas && (
+            <p style={{ 
+              color: 'red', 
+              fontSize: '12px', 
+              margin: '4px 0 0', 
+              fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" 
+            }}>
+              {formErrors.tallas}
+            </p>
+          )}
+        </div>
+        
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
+            Materiales
+          </label>
+          
+          {/* Selected Materials Section */}
+          <div style={{ 
+            marginBottom: '12px',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '8px'
+          }}>
+            {productoForm.materiales.length === 0 ? (
+              <p style={{ 
+                color: '#888', 
+                fontStyle: 'italic',
+                fontSize: '14px',
+                margin: '0'
+              }}>No hay materiales seleccionados</p>
+            ) : (
+              productoForm.materiales.map((material, index) => (
+                <div key={`selected-material-${index}`} style={{
+                  backgroundColor: '#f3f4f6',
+                  borderRadius: '4px',
+                  padding: '4px 8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '14px'
+                }}>
+                  {material}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Remove this material
+                      const newMaterials = [...productoForm.materiales];
+                      newMaterials.splice(index, 1);
+                      setProductoForm(prev => ({
+                        ...prev,
+                        materiales: newMaterials
+                      }));
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: '#888',
+                      fontSize: '16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '0',
+                      marginLeft: '2px'
+                    }}
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Available Materials Section */}
+          <div style={{ 
+            border: formErrors.materiales ? '1px solid red' : '1px solid #ddd',
+            borderRadius: '5px',
+            padding: '12px',
+            backgroundColor: 'white',
+            maxHeight: '150px',
+            overflowY: 'auto'
+          }}>
+            {materialsLoading ? (
+              <p style={{ fontSize: '14px', color: '#666', margin: '0' }}>Cargando materiales...</p>
+            ) : materialsError ? (
+              <p style={{ fontSize: '14px', color: 'red', margin: '0' }}>{materialsError}</p>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {availableMaterials.map(material => {
+                  // Check if this material is already selected
+                  const isSelected = productoForm.materiales.includes(material.nombre);
+                  
+                  return (
+                    <div 
+                      key={material.id} 
+                      style={{ 
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '4px',
+                        padding: '6px 10px',
+                        fontSize: '14px',
+                        opacity: isSelected ? 0.6 : 1
+                      }}
+                    >
+                      {material.nombre}
+                      <button
+                        type="button"
+                        disabled={isSelected}
+                        onClick={() => {
+                          // Add this material if not already selected
+                          if (!isSelected) {
+                            setProductoForm(prev => ({
+                              ...prev,
+                              materiales: [...prev.materiales, material.nombre]
+                            }));
+                            
+                            // Clear potential previous error
+                            if (formErrors.materiales) {
+                              setFormErrors(prev => ({
+                                ...prev,
+                                materiales: ''
+                              }));
+                            }
+                          }
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: isSelected ? 'default' : 'pointer',
+                          color: isSelected ? '#ccc' : '#4F46E5',
+                          fontWeight: 'bold',
+                          fontSize: '18px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '0',
+                          marginLeft: '2px'
+                        }}
+                        title={isSelected ? "Material ya seleccionado" : "Añadir material"}
+                      >
+                        +
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          
+          {formErrors.materiales && (
+            <p style={{ 
+              color: 'red', 
+              fontSize: '12px', 
+              margin: '4px 0 0', 
+              fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" 
+            }}>
+              {formErrors.materiales}
+            </p>
+          )}
+        </div>
+        
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
+            Herramientas
+          </label>
+          
+          {/* Selected Herramientas Section */}
+          <div style={{ 
+            marginBottom: '12px',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '8px'
+          }}>
+            {productoForm.herramientas.length === 0 ? (
+              <p style={{ 
+                color: '#888', 
+                fontStyle: 'italic',
+                fontSize: '14px',
+                margin: '0'
+              }}>No hay herramientas seleccionadas</p>
+            ) : (
+              productoForm.herramientas.map((herramienta, index) => (
+                <div key={`selected-herramienta-${index}`} style={{
+                  backgroundColor: '#f3f4f6',
+                  borderRadius: '4px',
+                  padding: '4px 8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '14px'
+                }}>
+                  {herramienta}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Remove this herramienta
+                      const newHerramientas = [...productoForm.herramientas];
+                      newHerramientas.splice(index, 1);
+                      setProductoForm(prev => ({
+                        ...prev,
+                        herramientas: newHerramientas
+                      }));
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: '#888',
+                      fontSize: '16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '0',
+                      marginLeft: '2px'
+                    }}
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Available Herramientas Section */}
+          <div style={{ 
+            border: formErrors.herramientas ? '1px solid red' : '1px solid #ddd',
+            borderRadius: '5px',
+            padding: '12px',
+            backgroundColor: 'white',
+            maxHeight: '150px',
+            overflowY: 'auto'
+          }}>
+            {herramientasLoading ? (
+              <p style={{ fontSize: '14px', color: '#666', margin: '0' }}>Cargando herramientas...</p>
+            ) : herramientasError ? (
+              <p style={{ fontSize: '14px', color: 'red', margin: '0' }}>{herramientasError}</p>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {availableHerramientas.map(herramienta => {
+                  // Check if this herramienta is already selected
+                  const isSelected = productoForm.herramientas.includes(herramienta.nombre);
+                  
+                  return (
+                    <div 
+                      key={herramienta.id} 
+                      style={{ 
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '4px',
+                        padding: '6px 10px',
+                        fontSize: '14px',
+                        opacity: isSelected ? 0.6 : 1
+                      }}
+                    >
+                      {herramienta.nombre}
+                      <button
+                        type="button"
+                        disabled={isSelected}
+                        onClick={() => {
+                          // Add this herramienta if not already selected
+                          if (!isSelected) {
+                            setProductoForm(prev => ({
+                              ...prev,
+                              herramientas: [...prev.herramientas, herramienta.nombre]
+                            }));
+                            
+                            // Clear potential previous error
+                            if (formErrors.herramientas) {
+                              setFormErrors(prev => ({
+                                ...prev,
+                                herramientas: ''
+                              }));
+                            }
+                          }
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: isSelected ? 'default' : 'pointer',
+                          color: isSelected ? '#ccc' : '#4F46E5',
+                          fontWeight: 'bold',
+                          fontSize: '18px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '0',
+                          marginLeft: '2px'
+                        }}
+                        title={isSelected ? "Herramienta ya seleccionada" : "Añadir herramienta"}
+                      >
+                        +
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          
+          {formErrors.herramientas && (
+            <p style={{ 
+              color: 'red', 
+              fontSize: '12px', 
+              margin: '4px 0 0', 
+              fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" 
+            }}>
+              {formErrors.herramientas}
+            </p>
+          )}
+        </div>
+        
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
             Descripción
           </label>
           <textarea
             name="descripcion"
             value={productoForm.descripcion}
             onChange={handleProductoChange}
-            placeholder="Características, instrucciones de cuidado, etc."
+            placeholder="Características del producto, detalles, etc."
             style={{
               width: '100%',
               padding: '10px',
-              borderRadius: '8px',
+              borderRadius: '5px',
               border: '1px solid #ddd',
               fontSize: '14px',
-              fontFamily: "'Poppins', sans-serif",
-              minHeight: '80px',
-              resize: 'vertical'
-            }}
-          />
-        </div>
-        
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-            Materiales
-          </label>
-          <textarea
-            name="materiales"
-            value={productoForm.materiales}
-            onChange={handleProductoChange}
-            placeholder="Cuero, tela, goma, etc."
-            style={{
-              width: '100%',
-              padding: '10px',
-              borderRadius: '8px',
-              border: '1px solid #ddd',
-              fontSize: '14px',
-              fontFamily: "'Poppins', sans-serif",
+              fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
               minHeight: '80px',
               resize: 'vertical'
             }}
@@ -1356,164 +1241,54 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
           <button
             type="button"
             onClick={onClose}
-            disabled={isSaving}
+            disabled={isSaving || materialsLoading}
             style={{
               backgroundColor: 'white',
               color: '#666',
               border: '1px solid #e0e0e0',
               padding: '0 24px',
-              borderRadius: '8px',
-              cursor: isSaving ? 'default' : 'pointer',
+              borderRadius: '5px',
+              cursor: (isSaving || materialsLoading) ? 'default' : 'pointer',
               fontSize: '14px',
               fontWeight: 500,
               height: '36px',
               transition: 'all 0.2s ease',
               display: 'flex',
               alignItems: 'center',
-              fontFamily: "'Poppins', sans-serif",
-              opacity: isSaving ? 0.7 : 1,
+              fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+              opacity: (isSaving || materialsLoading) ? 0.7 : 1,
             }}
-            onMouseEnter={(e) => !isSaving && (e.currentTarget.style.transform = 'translateY(-2px)')}
-            onMouseLeave={(e) => !isSaving && (e.currentTarget.style.transform = 'translateY(0)')}
+            onMouseEnter={(e) => !isSaving && !materialsLoading && (e.currentTarget.style.transform = 'translateY(-2px)')}
+            onMouseLeave={(e) => !isSaving && !materialsLoading && (e.currentTarget.style.transform = 'translateY(0)')}
           >
             Cancelar
           </button>
           <button
             type="submit"
-            disabled={isSaving}
+            disabled={isSaving || materialsLoading}
             style={{
               backgroundColor: 'white',
               color: '#4F46E5',
               border: '1px solid #e0e0e0',
               padding: '0 24px',
-              borderRadius: '8px',
-              cursor: isSaving ? 'default' : 'pointer',
+              borderRadius: '5px',
+              cursor: (isSaving || materialsLoading) ? 'default' : 'pointer',
               fontSize: '14px',
               fontWeight: 500,
               height: '36px',
               transition: 'all 0.2s ease',
               display: 'flex',
               alignItems: 'center',
-              fontFamily: "'Poppins', sans-serif",
-              opacity: isSaving ? 0.7 : 1,
+              fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+              opacity: (isSaving || materialsLoading) ? 0.7 : 1,
             }}
-            onMouseEnter={(e) => !isSaving && (e.currentTarget.style.transform = 'translateY(-2px)')}
-            onMouseLeave={(e) => !isSaving && (e.currentTarget.style.transform = 'translateY(0)')}
+            onMouseEnter={(e) => !isSaving && !materialsLoading && (e.currentTarget.style.transform = 'translateY(-2px)')}
+            onMouseLeave={(e) => !isSaving && !materialsLoading && (e.currentTarget.style.transform = 'translateY(0)')}
           >
             {isSaving ? 'Guardando...' : 'Añadir producto'}
           </button>
         </div>
       </form>
-      
-      {/* Modal para mostrar el código QR generado */}
-      {showQrModal && (
-        <QRCodeModal
-          qrUrl={qrCodeUrl}
-          itemName={productoForm.nombre}
-          itemType="producto"
-          itemId={savedItemId}
-          onClose={handleCloseQrModal}
-          isClosing={isQrModalClosing}
-        />
-      )}
-      
-      {/* Modal para mostrar el texto extraído del PDF/imagen */}
-      {showExtractedText && (
-        <div 
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'white',
-            zIndex: 30,
-            display: 'flex',
-            flexDirection: 'column',
-            padding: '24px',
-            borderRadius: '8px',
-            opacity: isExtractedTextClosing ? 0 : 1,
-            transform: isExtractedTextClosing ? 'scale(0.95)' : 'scale(1)',
-            transition: 'all 0.3s ease-in-out',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
-            <button
-              onClick={closeExtractedTextModal}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                marginRight: '12px',
-                borderRadius: '8px',
-                padding: '4px',
-              }}
-            >
-              <ArrowLeftIcon style={{ width: '20px', height: '20px', color: '#666' }} />
-            </button>
-            <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>
-              Datos extraídos del documento
-            </h2>
-          </div>
-          
-          <div 
-            style={{
-              flex: 1,
-              overflowY: 'auto',
-              border: '2px solid #4F46E5',
-              borderRadius: '8px',
-              padding: '16px',
-              backgroundColor: '#f9f9f9',
-              fontSize: '14px',
-              fontFamily: 'monospace',
-              whiteSpace: 'pre-wrap',
-              marginBottom: '20px',
-              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-            }}
-            className="apple-scrollbar"
-          >
-            {extractedText || 'No se pudo extraer texto del documento.'}
-          </div>
-          
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px' }}>
-            <div>
-              <p style={{ 
-                fontSize: '14px', 
-                color: '#16A34A', 
-                fontFamily: "'Poppins', sans-serif", 
-                margin: '0 0 8px 0' 
-              }}>
-                Los datos extraídos han sido aplicados al formulario
-              </p>
-            </div>
-            
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button
-                onClick={closeExtractedTextModal}
-                style={{
-                  backgroundColor: 'white',
-                  color: '#666',
-                  border: '1px solid #e0e0e0',
-                  padding: '0 24px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  height: '36px',
-                  transition: 'all 0.2s ease',
-                  display: 'flex',
-                  alignItems: 'center',
-                  fontFamily: "'Poppins', sans-serif",
-                }}
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

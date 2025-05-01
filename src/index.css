@@ -7,6 +7,16 @@
   text-rendering: optimizeLegibility;
 }
 
+/* Ocultar scrollbars en toda la aplicación */
+::-webkit-scrollbar {
+  display: none; /* Para Chrome, Safari y Opera */
+}
+
+* {
+  -ms-overflow-style: none;  /* Para Internet Explorer y Edge */
+  scrollbar-width: none;  /* Para Firefox */
+}
+
 html, body {
   width: 100%;
   height: 100%;
