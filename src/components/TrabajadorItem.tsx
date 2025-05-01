@@ -96,14 +96,14 @@ function TrabajadorItem({
     // Toggle selection if clicking the card header area
     // onSelectChange(trabajador.id, !isSelected); 
     // OR toggle expansion:
-    setIsExpanded(!isExpanded); 
+    setIsExpanded(!isExpanded);
   };
   
   // Handler specifically for checkbox change
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onSelectChange(trabajador.id, e.target.checked);
   };
-
+  
   return (
     <div 
       onClick={handleCardClick}
