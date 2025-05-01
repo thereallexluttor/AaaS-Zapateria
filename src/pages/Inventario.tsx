@@ -8,15 +8,15 @@ import { useInventario } from '../lib/hooks';
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
 
 type ModalType = 'material' | 'producto' | 'herramienta' | null;
-type FilterTab = 'todos' | 'materiales' | 'productos' | 'herramientas';
+type FilterTab = 'materiales' | 'productos' | 'herramientas';
 
 function Inventario() {
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [isClosing, setIsClosing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedItem, setSelectedItem] = useState<InventoryItemType | null>(null);
-  const [activeTab, setActiveTab] = useState<FilterTab>('todos');
-  const [prevTab, setPrevTab] = useState<FilterTab>('todos');
+  const [activeTab, setActiveTab] = useState<FilterTab>('materiales');
+  const [prevTab, setPrevTab] = useState<FilterTab>('materiales');
   const [transitionDirection, setTransitionDirection] = useState<'left' | 'right'>('right');
   
   // Referencia para guardar el último término de búsqueda que se envió a la API
@@ -102,10 +102,7 @@ function Inventario() {
   const getFilteredItems = useCallback(() => {
     const allItems = getAllItems();
     
-    if (activeTab === 'todos') return allItems;
-    
     const typeMapping: Record<FilterTab, string> = {
-      'todos': '',
       'materiales': 'material',
       'productos': 'producto',
       'herramientas': 'herramienta'
@@ -122,7 +119,7 @@ function Inventario() {
     if (tab === activeTab) return;
     
     // Establecer la dirección de la transición basada en la posición de la pestaña
-    const tabOrder = ['todos', 'materiales', 'productos', 'herramientas'];
+    const tabOrder = ['materiales', 'productos', 'herramientas'];
     const currentIndex = tabOrder.indexOf(activeTab);
     const nextIndex = tabOrder.indexOf(tab);
     
@@ -156,7 +153,14 @@ function Inventario() {
   };
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', padding: '24px', fontFamily: "'Poppins', sans-serif" }}>
+    <div style={{ 
+      position: 'relative', 
+      width: '100%', 
+      height: '100%', 
+      padding: '24px', 
+      fontFamily: "'Poppins', sans-serif",
+      overflow: 'hidden' 
+    }}>
       {/* Barra de búsqueda */}
       <div style={{ position: 'relative', marginBottom: '24px' }}>
         <div style={{ 
@@ -200,7 +204,7 @@ function Inventario() {
         marginBottom: '20px',
         paddingBottom: '2px'
       }}>
-        {(['todos', 'materiales', 'productos', 'herramientas'] as FilterTab[]).map((tab) => (
+        {(['materiales', 'productos', 'herramientas'] as FilterTab[]).map((tab) => (
           <button 
             key={tab}
             onClick={() => handleTabChange(tab)}
@@ -223,7 +227,6 @@ function Inventario() {
             {/* Animación de subrayado */}
             <span className={activeTab === tab ? 'tab-underline-active' : 'tab-underline'} />
             
-            {tab === 'todos' && 'Todos'}
             {tab === 'materiales' && '🧵 Materiales'}
             {tab === 'productos' && '👞 Productos'}
             {tab === 'herramientas' && '🔧 Herramientas'}
@@ -243,7 +246,6 @@ function Inventario() {
         justifyContent: 'space-between'
       }}>
         <span>
-          {activeTab === 'todos' && 'Lista Inventario'}
           {activeTab === 'materiales' && 'Lista Materiales'}
           {activeTab === 'productos' && 'Lista Productos'}
           {activeTab === 'herramientas' && 'Lista Herramientas'}
@@ -316,15 +318,16 @@ function Inventario() {
             }}>
               {searchTerm 
                 ? `No se encontraron elementos para "${searchTerm}"` 
-                : activeTab === 'todos'
-                  ? 'No hay elementos en el inventario. Agrega algunos usando los botones de abajo.'
-                  : `No hay ${
-                      activeTab === 'materiales' ? 'materiales' : 
-                      activeTab === 'productos' ? 'productos' : 'herramientas'
-                    } en el inventario.`
+                : `No hay ${
+                    activeTab === 'materiales' ? 'materiales' : 
+                    activeTab === 'productos' ? 'productos' : 'herramientas'
+                  } en el inventario.`
               }
             </div>
           )}
+          
+          {/* Espacio adicional para permitir scroll más abajo */}
+          <div style={{ padding: '100px 0' }}></div>
         </div>
       </div>
       

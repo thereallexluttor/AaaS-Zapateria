@@ -102,7 +102,7 @@ export type Material = {
   fecha_adquisicion: string;
   ubicacion: string;
   imagen_url?: string;
-  QR_Code?: string;
+  qr_code: string | null;
   created_at?: string;
 };
 
@@ -119,25 +119,32 @@ export type Herramienta = {
   responsable: string;
   descripcion: string;
   imagen_url?: string;
-  QR_Code?: string;
+  qr_code: string | null;
   created_at?: string;
 };
 
+// Interface for the structure within the 'tallas' JSONB field
+export interface TallaStock {
+  numero: string;
+  stock: number;
+  stockMinimo: number;
+}
+
 export type Producto = {
-  id?: string;
+  id?: string; // Typically number, but Supabase might return as string
   nombre: string;
-  precio: string;
-  stock: string;
-  stock_minimo: string;
-  categoria: string;
-  descripcion: string;
-  tallas: string;
-  colores: string;
-  tiempo_fabricacion: string;
+  precio: number; // Changed from string
+  categoria: string | null; // Added null
+  descripcion: string | null; // Added null
+  materiales: string[]; // Added, assuming array of strings based on form
+  herramientas: string[]; // Added, assuming array of strings based on form
+  tallas: TallaStock[]; // Changed from string to specific interface array
+  colores: string | null; // Added null
+  tiempo_fabricacion: number | null; // Changed from string, added null
   destacado: boolean;
-  imagen_url?: string;
-  QR_Code?: string;
-  created_at?: string;
+  imagen_url: string | null; // Added null
+  qr_code: string | null; // Renamed from QR_Code, added null
+  created_at: string | null; // Added null (assuming timestamp comes as string)
 };
 
 export type Cliente = {

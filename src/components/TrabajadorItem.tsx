@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { EllipsisHorizontalIcon, PencilIcon, TrashIcon, EyeIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { EyeIcon } from '@heroicons/react/24/outline';
 
 export interface TrabajadorItemType {
   id: string;
@@ -22,13 +22,17 @@ export interface TrabajadorItemType {
 
 interface TrabajadorItemProps {
   trabajador: TrabajadorItemType;
+  isSelected: boolean;
+  onSelectChange: (id: string, isSelected: boolean) => void;
   onViewDetails?: (trabajador: TrabajadorItemType) => void;
-  onEdit?: (trabajador: TrabajadorItemType) => void;
-  onDelete?: (id: string) => void;
 }
 
-function TrabajadorItem({ trabajador, onViewDetails, onEdit, onDelete }: TrabajadorItemProps) {
-  const [showActions, setShowActions] = useState(false);
+function TrabajadorItem({ 
+  trabajador, 
+  isSelected, 
+  onSelectChange, 
+  onViewDetails 
+}: TrabajadorItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   
   // Obtener una imagen de avatar con las iniciales del trabajador
@@ -54,8 +58,6 @@ function TrabajadorItem({ trabajador, onViewDetails, onEdit, onDelete }: Trabaja
         return { label: 'Ventas', color: '#EA580C', bgColor: '#FFEDD5', icon: '🛒' };
       case 'administrativo':
         return { label: 'Administrativo', color: '#2563EB', bgColor: '#DBEAFE', icon: '📊' };
-      case 'diseño':
-        return { label: 'Diseño', color: '#9333EA', bgColor: '#F3E8FF', icon: '✏️' };
       default:
         return { label: 'No asignado', color: '#6B7280', bgColor: '#F3F4F6', icon: '❓' };
     }
@@ -86,38 +88,31 @@ function TrabajadorItem({ trabajador, onViewDetails, onEdit, onDelete }: Trabaja
     if (onViewDetails) {
       onViewDetails(trabajador);
     }
-    setShowActions(false);
-  };
-  
-  const handleEdit = () => {
-    if (onEdit) {
-      onEdit(trabajador);
-    }
-    setShowActions(false);
-  };
-  
-  const handleDelete = () => {
-    if (onDelete) {
-      onDelete(trabajador.id);
-    }
-    setShowActions(false);
   };
 
   const handleCardClick = (e: React.MouseEvent) => {
-    // Prevent expanding if clicking action buttons
-    if ((e.target as HTMLElement).closest('button')) return;
-    setIsExpanded(!isExpanded);
+    // Prevent expanding/toggling selection if clicking action buttons or the checkbox itself
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('input[type="checkbox"]')) return;
+    // Toggle selection if clicking the card header area
+    // onSelectChange(trabajador.id, !isSelected); 
+    // OR toggle expansion:
+    setIsExpanded(!isExpanded); 
   };
   
+  // Handler specifically for checkbox change
+  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onSelectChange(trabajador.id, e.target.checked);
+  };
+
   return (
     <div 
       onClick={handleCardClick}
       style={{
-        background: '#fff',
-        borderRadius: '8px',
-        boxShadow: 'none',
+        background: isSelected ? '#F3F4F6' : '#fff', // Highlight if selected
+        borderRadius: '5px',
+        boxShadow: '0 2px 10px rgba(0, 0, 0, 0.05)',
         padding: '16px',
-        marginBottom: '12px',
+        marginBottom: '8px',
         display: 'flex',
         flexDirection: 'column',
         transition: 'all 0.3s ease',
@@ -127,17 +122,13 @@ function TrabajadorItem({ trabajador, onViewDetails, onEdit, onDelete }: Trabaja
         cursor: 'pointer',
         transform: isExpanded ? 'scale(1)' : 'scale(1)',
       }}
-      onMouseEnter={() => {
-        const elem = document.activeElement as HTMLElement;
-        if (!elem || elem.tagName !== 'BUTTON') {
-          setShowActions(true);
-        }
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = 'translateY(-2px)';
+        e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.1)';
       }}
-      onMouseLeave={() => {
-        const elem = document.activeElement as HTMLElement;
-        if (!elem || elem.tagName !== 'BUTTON') {
-          setShowActions(false);
-        }
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = '0 2px 10px rgba(0, 0, 0, 0.05)';
       }}
     >
       {/* Borde izquierdo coloreado */}
@@ -146,26 +137,39 @@ function TrabajadorItem({ trabajador, onViewDetails, onEdit, onDelete }: Trabaja
         left: 0,
         top: 0,
         bottom: 0,
-        width: '4px',
+        width: '6px',
         backgroundColor: tipoInfo.color,
-        borderRadius: '4px 0 0 4px'
+        borderRadius: '5px 0 0 5px'
       }} />
       
       {/* Contenido principal */}
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'auto 1fr auto auto',
+        gridTemplateColumns: 'auto auto 1fr auto auto', // Add column for checkbox
         gap: '16px',
         width: '100%',
-        alignItems: 'center'
+        alignItems: 'center',
+        paddingLeft: '6px'
       }}>
+        {/* Checkbox */}
+        <div style={{ display: 'flex', alignItems: 'center', justifySelf: 'center' }}>
+          <input 
+            type="checkbox"
+            checked={isSelected}
+            onChange={handleCheckboxChange}
+            onClick={(e) => e.stopPropagation()} // Prevent card click when clicking checkbox
+            style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+          />
+        </div>
+        
         {/* Avatar */}
         <div style={{ 
-          width: '48px', 
-          height: '48px', 
-          borderRadius: '8px',
+          width: '54px', 
+          height: '54px', 
+          borderRadius: '5px',
           overflow: 'hidden',
-          flexShrink: 0
+          flexShrink: 0,
+          boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)'
         }}>
           <img 
             src={getInitialAvatar()} 
@@ -177,9 +181,9 @@ function TrabajadorItem({ trabajador, onViewDetails, onEdit, onDelete }: Trabaja
         {/* Información básica */}
         <div style={{ minWidth: 0 }}>
           <h3 style={{ 
-            fontSize: '15px', 
+            fontSize: '16px', 
             fontWeight: 600, 
-            margin: '0 0 4px 0',
+            margin: '0 0 6px 0',
             color: '#111827'
           }}>
             {trabajador.nombre} {trabajador.apellido}
@@ -194,6 +198,9 @@ function TrabajadorItem({ trabajador, onViewDetails, onEdit, onDelete }: Trabaja
             flexWrap: 'wrap'
           }}>
               <span>CI: {trabajador.cedula}</span>
+              {trabajador.fecha_contratacion && (
+                <span>Contratado: {fechaFormateada}</span>
+              )}
             {areaInfo && (
               <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                 <span>{areaInfo.icon}</span> {areaInfo.label}
@@ -204,8 +211,8 @@ function TrabajadorItem({ trabajador, onViewDetails, onEdit, onDelete }: Trabaja
         
         {/* Etiqueta de tipo */}
         <div style={{
-          padding: '4px 8px',
-          borderRadius: '4px',
+          padding: '6px 10px',
+          borderRadius: '5px',
           fontSize: '12px',
           fontWeight: 500,
           backgroundColor: tipoInfo.bgColor,
@@ -221,7 +228,7 @@ function TrabajadorItem({ trabajador, onViewDetails, onEdit, onDelete }: Trabaja
         {/* Salario */}
         {trabajador.salario && (
           <div style={{
-            fontSize: '14px',
+            fontSize: '15px',
             fontWeight: 600,
             color: '#111827',
             whiteSpace: 'nowrap'
@@ -336,132 +343,19 @@ function TrabajadorItem({ trabajador, onViewDetails, onEdit, onDelete }: Trabaja
           </div>
         </div>
 
-        {/* Botones de acción */}
+        {/* En lugar de botones de acción, solo mostramos una indicación de cómo cerrar */}
         <div style={{ 
           display: 'flex',
-          justifyContent: 'flex-end',
-          gap: '8px',
+          justifyContent: 'center',
           marginTop: '16px',
-          paddingTop: '16px',
-          borderTop: '1px solid #E5E7EB'
-      }}>
-        <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onEdit) onEdit(trabajador);
-            }}
-          style={{
-              padding: '6px 12px',
-              borderRadius: '6px',
-              border: '1px solid #E5E7EB',
-              backgroundColor: 'white',
-              color: '#374151',
-              fontSize: '13px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-            cursor: 'pointer',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            <PencilIcon style={{ width: '14px', height: '14px' }} />
-            Editar
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onDelete) onDelete(trabajador.id);
-            }}
-            style={{
-              padding: '6px 12px',
-              borderRadius: '6px',
-              border: '1px solid #FCA5A5',
-              backgroundColor: '#FEE2E2',
-              color: '#DC2626',
-              fontSize: '13px',
-            display: 'flex',
-            alignItems: 'center',
-              gap: '4px',
-              cursor: 'pointer',
-            transition: 'all 0.2s ease',
-          }}
-        >
-            <TrashIcon style={{ width: '14px', height: '14px' }} />
-            Eliminar
-        </button>
+          paddingTop: '12px',
+          borderTop: '1px solid #E5E7EB',
+          color: '#6B7280',
+          fontSize: '13px'
+        }}>
+          Haz clic en la tarjeta para cerrar
         </div>
       </div>
-
-      {/* Menú de acciones flotante (solo visible cuando no está expandido) */}
-      {!isExpanded && (
-        <div style={{ 
-          display: 'flex',
-          opacity: showActions ? 1 : 0,
-          position: 'absolute',
-          right: '16px',
-          top: '50%',
-          transform: showActions ? 'translate(0, -50%)' : 'translate(10px, -50%)',
-          transition: 'opacity 0.2s ease, transform 0.2s ease',
-          background: 'white',
-          borderRadius: '6px',
-          padding: '4px',
-          boxShadow: 'none',
-          border: showActions ? '1px solid #E5E7EB' : 'none',
-          zIndex: 2
-        }}>
-        <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onEdit) onEdit(trabajador);
-            }}
-          style={{
-            background: 'none',
-            border: 'none',
-            padding: '6px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#6B7280',
-            borderRadius: '4px',
-            transition: 'all 0.2s ease',
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-        >
-          <PencilIcon style={{ width: '18px', height: '18px' }} />
-        </button>
-        
-        <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onDelete) onDelete(trabajador.id);
-            }}
-          style={{
-            background: 'none',
-            border: 'none',
-            padding: '6px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#EF4444',
-            borderRadius: '4px',
-            transition: 'all 0.2s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#FEE2E2';
-            e.currentTarget.style.color = '#DC2626';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = '#EF4444';
-          }}
-        >
-          <TrashIcon style={{ width: '18px', height: '18px' }} />
-        </button>
-      </div>
-      )}
     </div>
   );
 }

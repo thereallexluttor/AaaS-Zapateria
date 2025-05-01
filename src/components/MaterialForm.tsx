@@ -1,15 +1,41 @@
-import { useState, useRef, useEffect } from 'react';
-import { ArrowLeftIcon, PhotoIcon, SparklesIcon, DocumentIcon, ChatBubbleBottomCenterTextIcon } from '@heroicons/react/24/outline';
+import { useState, useRef } from 'react';
+import { ArrowLeftIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { useInventario } from '../lib/hooks';
 import { uploadImageToSupabase, generateQRCode } from '../lib/hooks';
 import QRCodeModal from './QRCodeModal';
-import { supabase } from '../lib/supabase';
 import React from 'react';
 
-// Estilo global para aplicar Poppins a todo el componente
+// Estilo global para aplicar Helvetica Neue a todo el componente
 const globalStyles = {
-  fontFamily: "'Poppins', sans-serif",
+  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
 };
+
+// Estilos para placeholder más gris
+const placeholderColor = '#a0a0a0';
+
+// CSS para los placeholders y animaciones de foco
+const customStyles = `
+  ::placeholder {
+    color: ${placeholderColor};
+    opacity: 1;
+  }
+  
+  input, select, textarea {
+    transition: border 0.2s ease-in-out, box-shadow 0.2s ease-in-out, transform 0.1s ease-in-out;
+  }
+  
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: #4F46E5 !important;
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+    transform: translateY(-1px);
+  }
+`;
+
+// Estilos para opciones y selects vacíos
+const selectStyle = (hasValue: boolean) => ({
+  color: hasValue ? 'inherit' : placeholderColor
+});
 
 // Tipos para materiales
 export interface MaterialForm {
@@ -84,6 +110,36 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
   // Estado para previsualización de imagen
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
+  // Opciones de categorías para el select
+  const categorias = [
+    'Cuero',
+    'Textil',
+    'Hilo',
+    'Adhesivo',
+    'Suela',
+    'Hebilla',
+    'Ornamento',
+    'Plantilla',
+    'Otros'
+  ];
+
+  // Opciones de unidades para el select
+  const unidades = [
+    'metros',
+    'metros cuadrados',
+    'unidades',
+    'pares',
+    'kilogramos',
+    'gramos',
+    'litros',
+    'mililitros',
+    'pulgadas',
+    'centímetros',
+    'rollos',
+    'cajas',
+    'bobinas'
+  ];
+
   const handleMaterialChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setMaterialForm(prev => ({
@@ -103,12 +159,27 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Para análisis OCR, NO mostramos la imagen en el formulario
-      // No actualizar setImagePreview
+      // Verificar el tamaño del archivo (límite 5MB)
+      const fileSizeMB = file.size / (1024 * 1024);
+      if (fileSizeMB > 5) {
+        setServerError('La imagen es demasiado grande. El tamaño máximo permitido es 5MB.');
+        // Limpiar el input para permitir subir el mismo archivo después de corregirlo
+        e.target.value = '';
+        return;
+      }
+
+      // Verificar el tipo de archivo
+      const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+      if (!validTypes.includes(file.type)) {
+        setServerError('Formato no válido. Por favor, sube una imagen en formato JPG o PNG.');
+        e.target.value = '';
+        return;
+      }
       
       // Indicar que estamos procesando la imagen
       setLoadingAI(true);
       setProcessingImageWithOCR(true);
+      setServerError(null); // Limpiar errores previos
       
       try {
         // Guardar temporalmente el archivo para procesarlo con Python OCR
@@ -155,22 +226,33 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
       } catch (error: any) {
         console.error('Error al procesar la imagen:', error);
         
-        // Mensaje de error más detallado
+        // Mensaje de error más detallado y orientado al usuario
         let errorMessage = error.message || 'Error desconocido';
+        let errorTitle = "Error de procesamiento";
+        let errorDescription = "No se pudo analizar la imagen";
         
-        // Verificar si es un error específico de la ruta o codificación
+        // Verificar si es un error específico y proporcionar mensajes más útiles
         if (errorMessage.includes('unicodeescape') || errorMessage.includes('path')) {
-          errorMessage = 'Error en la codificación de caracteres. Por favor contacte al soporte técnico.';
+          errorMessage = 'Hay caracteres especiales en el nombre del archivo. Renómbralo con caracteres simples e intenta de nuevo.';
         } else if (errorMessage.includes('OCR') || errorMessage.includes('tesseract')) {
-          errorMessage = 'Error en el procesamiento OCR. Verifique que la imagen tenga buena calidad.';
+          errorMessage = 'No se pudo leer el texto en la imagen. Asegúrate de que la imagen tenga buena calidad, esté bien iluminada y el texto sea legible.';
+          errorTitle = "Problema con el reconocimiento de texto";
+          errorDescription = "La imagen no contiene texto legible o su calidad es insuficiente";
+        } else if (errorMessage.includes('timeout') || errorMessage.includes('timedout')) {
+          errorMessage = 'El procesamiento tomó demasiado tiempo. Intenta con una imagen más pequeña o menos compleja.';
+          errorTitle = "Tiempo de espera agotado";
+        } else if (errorMessage.includes('memory') || errorMessage.includes('RAM')) {
+          errorMessage = 'No hay suficiente memoria para procesar esta imagen. Intenta con una imagen más pequeña.';
+          errorTitle = "Memoria insuficiente";
         }
         
         // Crear datos para mostrar el error
         const errorData = {
           error: true,
-          nombre: "Error de procesamiento",
-          descripcion: "No se pudo analizar la imagen",
-          message: `Error: ${errorMessage}`
+          nombre: errorTitle,
+          descripcion: errorDescription,
+          message: errorMessage,
+          sugerencia: "Consejo: Usa imágenes claras y con buena iluminación. Formatos recomendados: JPG, PNG."
         };
         
         // Mostrar información sobre el error
@@ -182,6 +264,8 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
       } finally {
         setLoadingAI(false);
         setProcessingImageWithOCR(false);
+        // Limpiar el input para permitir subir el mismo archivo de nuevo si es necesario
+        if (e.target) e.target.value = '';
       }
     }
   };
@@ -189,9 +273,26 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
   const handlePdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Verificar el tamaño del archivo (límite 10MB para PDFs)
+      const fileSizeMB = file.size / (1024 * 1024);
+      if (fileSizeMB > 10) {
+        setServerError('El PDF es demasiado grande. El tamaño máximo permitido es 10MB.');
+        // Limpiar el input para permitir subir el mismo archivo después de corregirlo
+        e.target.value = '';
+        return;
+      }
+
+      // Verificar el tipo de archivo
+      if (file.type !== 'application/pdf') {
+        setServerError('Formato no válido. Por favor, sube un archivo PDF.');
+        e.target.value = '';
+        return;
+      }
+      
       setLoadingAI(true);
       setShowAIOptions(false);
       setProcessingPDFWithOCR(true);
+      setServerError(null); // Limpiar errores previos
       
       try {
         // Guardar temporalmente el archivo PDF para procesarlo con Python
@@ -239,24 +340,39 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
       } catch (error: any) {
         console.error('Error al procesar el PDF:', error);
         
-        // Mensaje de error más detallado
+        // Mensaje de error más detallado y orientado al usuario
         let errorMessage = error.message || 'Error desconocido';
+        let errorTitle = "Error de procesamiento";
+        let errorDescription = "No se pudo analizar el PDF";
+        let sugerencia = "Consejo: Asegúrate de que el PDF no esté protegido y contenga texto seleccionable, no solo imágenes.";
         
-        // Verificar si es un error específico de la ruta o codificación
+        // Verificar si es un error específico para proporcionar mensajes más útiles
         if (errorMessage.includes('unicodeescape') || errorMessage.includes('path')) {
-          errorMessage = 'Error en la codificación de caracteres. Por favor contacte al soporte técnico.';
+          errorMessage = 'Hay caracteres especiales en el nombre del archivo. Renómbralo con caracteres simples e intenta de nuevo.';
         } else if (errorMessage.includes('PDF') || errorMessage.includes('PyMuPDF')) {
-          errorMessage = 'Error en el procesamiento del PDF. El archivo podría estar dañado o protegido.';
+          errorMessage = 'El PDF está dañado o protegido. Asegúrate de que no tenga restricciones de seguridad.';
+          errorTitle = "Problema con el archivo PDF";
+          errorDescription = "El archivo PDF no se puede leer correctamente";
         } else if (errorMessage.includes('OCR') || errorMessage.includes('tesseract')) {
-          errorMessage = 'Error en el procesamiento OCR. Verifique que el PDF contenga texto legible.';
+          errorMessage = 'No se pudo extraer texto legible del PDF. El documento podría contener solo imágenes o texto de baja calidad.';
+          errorTitle = "Problema con el reconocimiento de texto";
+          sugerencia = "Consejo: Sube un PDF que contenga texto seleccionable, no solo imágenes escaneadas.";
+        } else if (errorMessage.includes('timeout') || errorMessage.includes('timedout')) {
+          errorMessage = 'El procesamiento tomó demasiado tiempo. El PDF podría ser muy grande o complejo.';
+          errorTitle = "Tiempo de espera agotado";
+          sugerencia = "Consejo: Intenta con un PDF más pequeño o menos complejo.";
+        } else if (errorMessage.includes('memory') || errorMessage.includes('RAM')) {
+          errorMessage = 'No hay suficiente memoria para procesar este PDF. Intenta con un archivo más pequeño.';
+          errorTitle = "Memoria insuficiente";
         }
         
         // Crear datos para mostrar el error
         const errorData = {
           error: true,
-          nombre: "Error de procesamiento",
-          descripcion: "No se pudo analizar el PDF",
-          message: `Error: ${errorMessage}`
+          nombre: errorTitle,
+          descripcion: errorDescription,
+          message: errorMessage,
+          sugerencia: sugerencia
         };
         
         // Mostrar información sobre el error
@@ -268,20 +384,40 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
       } finally {
         setLoadingAI(false);
         setProcessingPDFWithOCR(false);
+        // Limpiar el input para permitir subir el mismo archivo de nuevo si es necesario
+        if (e.target) e.target.value = '';
       }
     }
   };
 
-  // Función para subir una imagen para el formulario (no para OCR)
+  // Función para subir una imagen para el formulario
   const handleFormImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Verificar el tamaño del archivo (límite 5MB)
+      const fileSizeMB = file.size / (1024 * 1024);
+      if (fileSizeMB > 5) {
+        setServerError('La imagen es demasiado grande. El tamaño máximo permitido es 5MB.');
+        // Limpiar el input para permitir subir el mismo archivo después de corregirlo
+        e.target.value = '';
+        return;
+      }
+
+      // Verificar el tipo de archivo
+      const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+      if (!validTypes.includes(file.type)) {
+        setServerError('Formato no válido. Por favor, sube una imagen en formato JPG o PNG.');
+        e.target.value = '';
+        return;
+      }
+      
       // Crear URL para previsualización local
       const previewUrl = URL.createObjectURL(file);
       setImagePreview(previewUrl);
       
       // Indicar que estamos subiendo la imagen
       setIsUploadingImage(true);
+      setServerError(null); // Limpiar errores previos
       
       try {
         // Subir la imagen a Supabase Storage
@@ -298,8 +434,11 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
         }
       } catch (error) {
         console.error('Error al subir la imagen:', error);
+        setServerError('Error al subir la imagen. Por favor, inténtalo de nuevo.');
       } finally {
         setIsUploadingImage(false);
+        // Limpiar el input para permitir subir el mismo archivo de nuevo si es necesario
+        if (e.target) e.target.value = '';
       }
     }
   };
@@ -442,15 +581,18 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
     const errors: Partial<Record<keyof MaterialForm, string>> = {};
     
     // Validar campos requeridos
-    if (!materialForm.nombre.trim()) errors.nombre = 'El nombre es obligatorio';
-    if (!materialForm.stock.trim()) errors.stock = 'El stock es obligatorio';
+    if (!materialForm.nombre.trim()) errors.nombre = 'Por favor, ingresa el nombre del material';
+    if (!materialForm.stock.trim()) errors.stock = 'Por favor, ingresa la cantidad de stock actual';
     
     // Validar que stock y precio sean números
     if (materialForm.stock && !/^\d+$/.test(materialForm.stock)) 
-      errors.stock = 'El stock debe ser un número';
+      errors.stock = 'El stock debe ser un número entero (ej: 120)';
     
     if (materialForm.precio && !/^\d+(\.\d{1,2})?$/.test(materialForm.precio)) 
-      errors.precio = 'El precio debe ser un número válido';
+      errors.precio = 'El precio debe ser un número con hasta 2 decimales (ej: 45.99)';
+    
+    if (materialForm.stockMinimo && !/^\d+$/.test(materialForm.stockMinimo))
+      errors.stockMinimo = 'El stock mínimo debe ser un número entero (ej: 30)';
     
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -527,164 +669,11 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
     }, 300);
   };
 
-  // Gestionar el menú de opciones de IA
-  const toggleAIOptions = () => {
-    setShowAIOptions(!showAIOptions);
-  };
-
-  // Simular completado con IA desde una foto
-  const completeWithAIFromImage = () => {
-    setShowAIOptions(false);
-    triggerFileInput();
-  };
-
-  // Simular completado con IA desde un PDF
-  const completeWithAIFromPdf = () => {
-    setShowAIOptions(false);
-    triggerPdfInput();
-  };
-
-  // Completar con IA automáticamente (función original)
-  const completeWithAI = () => {
-    setLoadingAI(true);
-    setShowAIOptions(false);
-    
-    // Simulación de carga - en producción, aquí iría una llamada a la API de IA
-    setTimeout(() => {
-      setMaterialForm(prev => ({
-        ...prev,
-        nombre: prev.nombre || 'Cuero Vacuno Premium',
-        referencia: prev.referencia || 'CV-2023-456',
-        unidades: prev.unidades || 'metros cuadrados',
-        stock: prev.stock || '120',
-        stockMinimo: prev.stockMinimo || '30',
-        precio: prev.precio || '45.50',
-        categoria: prev.categoria || 'Cuero',
-        proveedor: prev.proveedor || 'Curtidos Superiores S.A.',
-        descripcion: prev.descripcion || 'Cuero vacuno de alta calidad, curtido al vegetal. Ideal para la fabricación de calzado de gama alta. Resistente al desgaste y con un acabado premium. Grosor de 2mm. Color marrón oscuro.',
-        fechaAdquisicion: prev.fechaAdquisicion || new Date().toISOString().split('T')[0],
-        ubicacion: prev.ubicacion || 'Almacén A, Estante 3'
-      }));
-      
-      setLoadingAI(false);
-    }, 1500);
-  };
-
-  // Opciones de categorías para el select
-  const categorias = [
-    'Cuero',
-    'Textil',
-    'Hilo',
-    'Adhesivo',
-    'Suela',
-    'Hebilla',
-    'Ornamento',
-    'Plantilla',
-    'Otros'
-  ];
-
-  // Función para cerrar el modal de texto extraído
-  const closeExtractedTextModal = () => {
-    setIsExtractedTextClosing(true);
-    setTimeout(() => {
-      setShowExtractedText(false);
-      setIsExtractedTextClosing(false);
-    }, 300);
-  };
-
-  // Función para formatear los datos extraídos para mostrarlos
-  const formatExtractedDataForDisplay = (jsonText: string) => {
-    try {
-      let data;
-      if (typeof jsonText === 'string') {
-        data = JSON.parse(jsonText);
-      } else {
-        data = jsonText;
-      }
-      
-      // Crear un objeto con las etiquetas en español
-      const labels: Record<string, string> = {
-        nombre: 'Nombre',
-        referencia: 'Referencia',
-        unidades: 'Unidades',
-        stock: 'Stock',
-        stockMinimo: 'Stock Mínimo',
-        precio: 'Precio',
-        categoria: 'Categoría',
-        proveedor: 'Proveedor',
-        descripcion: 'Descripción',
-        fechaAdquisicion: 'Fecha de Adquisición',
-        ubicacion: 'Ubicación'
-      };
-      
-      // Crear el HTML para mostrar los datos
-      return (
-        <div>
-          <h3 style={{
-            fontSize: '16px',
-            fontWeight: 600,
-            marginBottom: '16px',
-            fontFamily: "'Poppins', sans-serif"
-          }}>
-            Datos extraídos:
-          </h3>
-          
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 2fr',
-            gap: '8px',
-            fontSize: '14px',
-            fontFamily: "'Poppins', sans-serif"
-          }}>
-            {Object.entries(data).map(([key, value]) => {
-              if (key !== 'error' && key !== 'message' && labels[key]) {
-                return (
-                  <React.Fragment key={key}>
-                    <div style={{ 
-                      fontWeight: 500, 
-                      color: '#555',
-                      padding: '4px 0'
-                    }}>
-                      {labels[key] || key}:
-                    </div>
-                    <div style={{ 
-                      color: '#333',
-                      padding: '4px 0'
-                    }}>
-                      {value as string || '-'}
-                    </div>
-                  </React.Fragment>
-                );
-              }
-              return null;
-            })}
-          </div>
-          
-          {data.error && (
-            <div style={{
-              backgroundColor: 'rgba(220, 38, 38, 0.1)',
-              color: '#DC2626',
-              padding: '12px',
-              borderRadius: '8px',
-              marginTop: '16px',
-              fontSize: '14px'
-            }}>
-              <strong>Error:</strong> {data.message}
-            </div>
-          )}
-        </div>
-      );
-    } catch (error) {
-      console.error('Error al formatear datos:', error);
-      return <div>Error al procesar datos</div>;
-    }
-  };
-
   return (
     <div 
       style={{
         backgroundColor: 'white',
-        borderRadius: '8px',
+        borderRadius: '5px',
         padding: '24px',
         width: '820px',
         maxWidth: '95%',
@@ -695,700 +684,480 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
         opacity: isClosing ? 0 : 1,
         transition: 'all 0.3s ease-in-out',
         animation: isClosing ? '' : 'modalAppear 0.3s ease-out forwards',
-        fontFamily: "'Poppins', sans-serif",
+        fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       }}
       className="apple-scrollbar"
+      aria-labelledby="material-form-title"
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              marginRight: '12px',
-              borderRadius: '8px',
-              padding: '4px',
-            }}
-          >
-            <ArrowLeftIcon style={{ width: '20px', height: '20px', color: '#666' }} />
-          </button>
-          <h2 style={{ fontSize: '20px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>Agregar material</h2>
-        </div>
-
-        <div style={{ position: 'relative' }}>
-          <button
-            onClick={toggleAIOptions}
-            disabled={loadingAI}
-            style={{
-              display: 'flex', 
-              alignItems: 'center', 
-              backgroundColor: 'white',
-              color: '#4F46E5',
-              border: '1px solid #e0e0e0',
-              borderRadius: '8px',
-              padding: '8px 12px',
-              fontSize: '13px',
-              fontWeight: 500,
-              cursor: loadingAI ? 'default' : 'pointer',
-              opacity: loadingAI ? 0.7 : 1,
-              transition: 'all 0.2s ease',
-              height: '36px',
-            }}
-            onMouseEnter={(e) => !loadingAI && (e.currentTarget.style.transform = 'translateY(-2px)')}
-            onMouseLeave={(e) => !loadingAI && (e.currentTarget.style.transform = 'translateY(0)')}
-          >
-            <SparklesIcon style={{ width: '16px', height: '16px', marginRight: '6px', color: '#4F46E5' }} />
-            {loadingAI ? 'Generando...' : 'Completar con IA'}
-          </button>
-          
-          {/* Mensaje de procesamiento de imagen */}
-          {processingImageWithOCR && (
-            <div style={{ 
-              position: 'absolute', 
-              top: '44px', 
-              right: 0,
-              backgroundColor: '#F0F9FF',
-              border: '1px solid #BAE6FD',
-              borderRadius: '8px',
-              padding: '12px 16px',
-              width: '240px',
-              zIndex: 15,
-              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                <PhotoIcon style={{ width: '16px', height: '16px', marginRight: '8px', color: '#16A34A' }} />
-                <span style={{ fontWeight: 600, fontSize: '14px', color: '#16A34A' }}>Analizando imagen</span>
-              </div>
-              <p style={{ margin: 0, fontSize: '13px', color: '#166534' }}>
-                Extrayendo texto con OCR y procesando con IA para completar el formulario...
-              </p>
-            </div>
-          )}
-          
-          {/* Mensaje de procesamiento de PDF */}
-          {processingPDFWithOCR && (
-            <div style={{ 
-              position: 'absolute', 
-              top: '44px', 
-              right: 0,
-              backgroundColor: '#F0F9FF',
-              border: '1px solid #BAE6FD',
-              borderRadius: '8px',
-              padding: '12px 16px',
-              width: '240px',
-              zIndex: 15,
-              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                <DocumentIcon style={{ width: '16px', height: '16px', marginRight: '8px', color: '#DC2626' }} />
-                <span style={{ fontWeight: 600, fontSize: '14px', color: '#DC2626' }}>Analizando PDF</span>
-              </div>
-              <p style={{ margin: 0, fontSize: '13px', color: '#7F1D1D' }}>
-                Extrayendo texto del documento y procesando con IA para completar el formulario...
-              </p>
-            </div>
-          )}
-          
-          {/* Mensaje de procesamiento de texto */}
-          {processingText && (
-            <div style={{ 
-              position: 'absolute', 
-              top: '44px', 
-              right: 0,
-              backgroundColor: '#F0F9FF',
-              border: '1px solid #BAE6FD',
-              borderRadius: '8px',
-              padding: '12px 16px',
-              width: '240px',
-              zIndex: 15,
-              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                <ChatBubbleBottomCenterTextIcon style={{ width: '16px', height: '16px', marginRight: '8px', color: '#0EA5E9' }} />
-                <span style={{ fontWeight: 600, fontSize: '14px', color: '#0EA5E9' }}>Analizando texto</span>
-              </div>
-              <p style={{ margin: 0, fontSize: '13px', color: '#0C4A6E' }}>
-                Procesando descripción textual con IA para completar el formulario...
-              </p>
-            </div>
-          )}
-          
-          {/* Menú de opciones de IA */}
-          {showAIOptions && (
-            <div 
-              style={{
-                position: 'absolute',
-                top: '44px',
-                right: 0,
-                backgroundColor: 'white',
-                border: '1px solid #e0e0e0',
-                borderRadius: '8px',
-                width: '200px',
-                zIndex: 10,
-              }}
-            >
-              <div 
-                style={{ 
-                  padding: '10px 16px',
-                  borderBottom: '1px solid #f0f0f0',
-                  color: '#666',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  fontFamily: "'Poppins', sans-serif",
-                }}
-              >
-                SELECCIONAR FUENTE
-              </div>
-              
-              <button
-                onClick={completeWithAIFromImage}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  width: '100%',
-                  padding: '10px 16px',
-                  border: 'none',
-                  borderBottom: '1px solid #f0f0f0',
-                  backgroundColor: 'white',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-              >
-                <PhotoIcon style={{ width: '16px', height: '16px', marginRight: '10px', color: '#16A34A' }} />
-                <div>
-                  <div style={{ fontSize: '14px', color: '#333', fontFamily: "'Poppins', sans-serif" }}>Subir foto</div>
-                  <div style={{ fontSize: '12px', color: '#666', fontFamily: "'Poppins', sans-serif" }}>Extraer datos de imagen</div>
-                </div>
-              </button>
-              
-              <button
-                onClick={completeWithAIFromPdf}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  width: '100%',
-                  padding: '10px 16px',
-                  border: 'none',
-                  borderBottom: '1px solid #f0f0f0',
-                  backgroundColor: 'white',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-              >
-                <DocumentIcon style={{ width: '16px', height: '16px', marginRight: '10px', color: '#DC2626' }} />
-                <div>
-                  <div style={{ fontSize: '14px', color: '#333', fontFamily: "'Poppins', sans-serif" }}>Subir PDF</div>
-                  <div style={{ fontSize: '12px', color: '#666', fontFamily: "'Poppins', sans-serif" }}>Extraer datos de documento</div>
-                </div>
-              </button>
-              
-              <button
-                onClick={openTextInput}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  width: '100%',
-                  padding: '10px 16px',
-                  border: 'none',
-                  backgroundColor: 'white',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-              >
-                <ChatBubbleBottomCenterTextIcon style={{ width: '16px', height: '16px', marginRight: '10px', color: '#0EA5E9' }} />
-                <div>
-                  <div style={{ fontSize: '14px', color: '#333', fontFamily: "'Poppins', sans-serif" }}>Ingresar texto</div>
-                  <div style={{ fontSize: '12px', color: '#666', fontFamily: "'Poppins', sans-serif" }}>Procesar descripción textual</div>
-                </div>
-              </button>
-            </div>
-          )}
-          
-          {/* Input oculto para subir PDF */}
-          <input
-            type="file"
-            ref={pdfInputRef}
-            style={{ display: 'none' }}
-            onChange={handlePdfChange}
-            accept=".pdf"
-          />
-        </div>
-      </div>
+      <style>
+        {customStyles}
+      </style>
       
-      {/* Modal para ingresar texto */}
-      {showTextInput && (
-        <div 
+      <header style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+        <button
+          onClick={onClose}
           style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'white',
-            zIndex: 20,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
             display: 'flex',
-            flexDirection: 'column',
-            padding: '24px',
-            borderRadius: '8px',
+            alignItems: 'center',
+            marginRight: '12px',
+            borderRadius: '5px',
+            padding: '4px',
           }}
+          aria-label="Volver atrás"
         >
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
-            <button
-              onClick={closeTextInput}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                marginRight: '12px',
-                borderRadius: '8px',
-                padding: '4px',
-              }}
-            >
-              <ArrowLeftIcon style={{ width: '20px', height: '20px', color: '#666' }} />
-            </button>
-            <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>Ingresar descripción del material</h2>
-          </div>
-          
-          <p style={{ fontSize: '14px', color: '#666', marginBottom: '16px', fontFamily: "'Poppins', sans-serif" }}>
-            Describe el material con todos los detalles que puedas (nombre, tipo, características, cantidad, precio, etc.) y la IA extraerá la información para completar el formulario.
-          </p>
-          
-          <textarea
-            value={rawText}
-            onChange={handleRawTextChange}
-            placeholder="Ej: 50 láminas de corcho natural premium de 3mm de espesor para plantillas. Precio unitario 28.99€. Proveedor: Corcheras Ibéricas S.L. Son antibacterianas e ideales para calzado de alta gama..."
-            style={{
-              width: '100%',
-              padding: '12px',
-              borderRadius: '8px',
-              border: '1px solid #ddd',
-              fontSize: '14px',
-              fontFamily: "'Poppins', sans-serif",
-              flex: 1,
-              marginBottom: '20px',
-              resize: 'none',
-            }}
-          />
-          
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
-            <button
-              onClick={closeTextInput}
-              style={{
-                backgroundColor: 'white',
-                color: '#666',
-                border: '1px solid #e0e0e0',
-                padding: '0 24px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: 500,
-                height: '36px',
-                transition: 'all 0.2s ease',
-                display: 'flex',
-                alignItems: 'center',
-                fontFamily: "'Poppins', sans-serif",
-              }}
-            >
-              Cancelar
-            </button>
-            
-            <button
-              onClick={processRawText}
-              disabled={rawText.trim() === ''}
-              style={{
-                backgroundColor: 'white',
-                color: '#4F46E5',
-                border: '1px solid #e0e0e0',
-                padding: '0 24px',
-                borderRadius: '8px',
-                cursor: rawText.trim() === '' ? 'default' : 'pointer',
-                fontSize: '14px',
-                fontWeight: 500,
-                height: '36px',
-                opacity: rawText.trim() === '' ? 0.7 : 1,
-                transition: 'all 0.2s ease',
-                display: 'flex',
-                alignItems: 'center',
-                fontFamily: "'Poppins', sans-serif",
-              }}
-            >
-              <SparklesIcon style={{ width: '16px', height: '16px', marginRight: '6px', color: '#4F46E5' }} />
-              Procesar con IA
-            </button>
-          </div>
-        </div>
-      )}
+          <ArrowLeftIcon style={{ width: '20px', height: '20px', color: '#666' }} />
+        </button>
+        <h2 
+          id="material-form-title"
+          style={{ fontSize: '20px', fontWeight: 400, margin: 0, fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+        >
+          Agregar material
+        </h2>
+      </header>
       
-      {/* Mostrar mensaje de error del servidor si existe */}
       {serverError && (
-        <div style={{ 
-          backgroundColor: 'rgba(220, 38, 38, 0.1)', 
-          color: '#DC2626', 
-          padding: '12px', 
-          borderRadius: '8px',
-          marginBottom: '16px',
-          fontSize: '14px',
-          fontFamily: "'Poppins', sans-serif"
-        }}>
+        <div 
+          style={{ 
+            backgroundColor: 'rgba(220, 38, 38, 0.1)', 
+            color: '#DC2626', 
+            padding: '12px', 
+            borderRadius: '5px',
+            marginBottom: '16px',
+            fontSize: '14px',
+            fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif"
+          }}
+          role="alert"
+          aria-live="assertive"
+        >
           {serverError}
         </div>
       )}
       
       <form onSubmit={handleSubmitMaterial}>
-        <div style={{ display: 'flex', gap: '24px', marginBottom: '20px' }}>
-          <div 
-            style={{ 
-              width: '120px', 
-              height: '120px', 
-              flexShrink: 0,
-              backgroundColor: '#f0f0f0',
-              borderRadius: '8px',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              overflow: 'hidden'
-            }}
-          >
-            {imagePreview ? (
-              <img 
-                src={imagePreview} 
-                alt="Vista previa" 
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-              />
-            ) : (
-              <PhotoIcon style={{ width: '40px', height: '40px', color: '#aaa' }} />
-            )}
+        <section>
+          <div style={{ display: 'flex', gap: '24px', marginBottom: '20px' }}>
+            <div 
+              style={{ 
+                width: '120px', 
+                height: '120px', 
+                flexShrink: 0,
+                backgroundColor: '#f0f0f0',
+                borderRadius: '5px',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                overflow: 'hidden'
+              }}
+            >
+              {imagePreview ? (
+                <img 
+                  src={imagePreview} 
+                  alt="Vista previa del material" 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                />
+              ) : (
+                <PhotoIcon style={{ width: '40px', height: '40px', color: '#aaa' }} aria-hidden="true" />
+              )}
+            </div>
+            
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div>
+                <label 
+                  htmlFor="nombre-material"
+                  style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+                >
+                  Nombre material <span style={{ color: '#4F46E5' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  name="nombre"
+                  id="nombre-material"
+                  value={materialForm.nombre}
+                  onChange={handleMaterialChange}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '5px',
+                    border: formErrors.nombre ? '1px solid red' : '1px solid #ddd',
+                    fontSize: '14px',
+                    fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif"
+                  }}
+                  placeholder="Ej: Cuero vacuno curtido vegetal"
+                  aria-required="true"
+                  aria-invalid={!!formErrors.nombre}
+                  aria-describedby={formErrors.nombre ? "nombre-error" : undefined}
+                />
+                {formErrors.nombre && (
+                  <p 
+                    id="nombre-error"
+                    style={{ color: 'red', fontSize: '12px', margin: '4px 0 0', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+                  >
+                    {formErrors.nombre}
+                  </p>
+                )}
+              </div>
+              
+              <div style={{ display: 'flex', gap: '16px', marginTop: '10px' }}>
+                <input
+                  type="file"
+                  ref={formImageInputRef}
+                  style={{ display: 'none' }}
+                  onChange={handleFormImageChange}
+                  accept="image/*"
+                  id="form-image-input"
+                  aria-label="Subir foto del material"
+                />
+                <button 
+                  type="button"
+                  onClick={triggerFormImageInput}
+                  disabled={isUploadingImage}
+                  style={{
+                    backgroundColor: 'white',
+                    border: '1px solid #e0e0e0',
+                    padding: '8px 16px',
+                    borderRadius: '5px',
+                    cursor: isUploadingImage ? 'default' : 'pointer',
+                    fontSize: '14px',
+                    color: '#555',
+                    transition: 'all 0.2s ease',
+                    fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+                    opacity: isUploadingImage ? 0.7 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  onMouseEnter={(e) => !isUploadingImage && (e.currentTarget.style.transform = 'translateY(-2px)')}
+                  onMouseLeave={(e) => !isUploadingImage && (e.currentTarget.style.transform = 'translateY(0)')}
+                  aria-busy={isUploadingImage}
+                >
+                  {isUploadingImage ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Subiendo...
+                    </>
+                  ) : (
+                    'Agregar foto'
+                  )}
+                </button>
+                <p style={{ 
+                  margin: '8px 0 0', 
+                  fontSize: '12px', 
+                  color: '#666', 
+                  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+                  fontStyle: 'italic'
+                }}>
+                  Formatos: JPG, PNG. Máx 5MB
+                </p>
+              </div>
+            </div>
           </div>
-          
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-                Nombre material <span style={{ color: 'red' }}>*</span>
+        </section>
+        
+        <section aria-label="Información de referencia">
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+            <div style={{ flex: 1 }}>
+              <label 
+                htmlFor="referencia-material"
+                style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+              >
+                Referencia
               </label>
               <input
                 type="text"
-                name="nombre"
-                value={materialForm.nombre}
+                name="referencia"
+                id="referencia-material"
+                value={materialForm.referencia}
                 onChange={handleMaterialChange}
                 style={{
                   width: '100%',
                   padding: '10px',
-                  borderRadius: '8px',
-                  border: formErrors.nombre ? '1px solid red' : '1px solid #ddd',
+                  borderRadius: '5px',
+                  border: '1px solid #ddd',
                   fontSize: '14px',
-                  fontFamily: "'Poppins', sans-serif"
+                  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif"
                 }}
+                placeholder="Ej: CV-2023-456"
               />
-              {formErrors.nombre && (
-                <p style={{ color: 'red', fontSize: '12px', margin: '4px 0 0', fontFamily: "'Poppins', sans-serif" }}>
-                  {formErrors.nombre}
+            </div>
+            
+            <div style={{ flex: 1 }}>
+              <label 
+                htmlFor="unidades-material"
+                style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+              >
+                Unidades
+              </label>
+              <select
+                name="unidades"
+                id="unidades-material"
+                value={materialForm.unidades}
+                onChange={handleMaterialChange}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: '5px',
+                  border: '1px solid #ddd',
+                  fontSize: '14px',
+                  backgroundColor: 'white',
+                  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+                  ...selectStyle(!!materialForm.unidades)
+                }}
+                aria-label="Selecciona unidades de medida"
+              >
+                <option value="" style={{color: placeholderColor}}>Seleccionar unidades</option>
+                {unidades.map(unidad => (
+                  <option key={unidad} value={unidad}>{unidad}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div style={{ flex: 1 }}>
+              <label 
+                htmlFor="proveedor-material"
+                style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+              >
+                Proveedor
+              </label>
+              <input
+                type="text"
+                name="proveedor"
+                id="proveedor-material"
+                value={materialForm.proveedor}
+                onChange={handleMaterialChange}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: '5px',
+                  border: '1px solid #ddd',
+                  fontSize: '14px',
+                  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif"
+                }}
+                placeholder="Ej: Curtidos Superiores S.A."
+              />
+            </div>
+          </div>
+        </section>
+
+        <section aria-label="Información de inventario">
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+            <div style={{ flex: 1 }}>
+              <label 
+                htmlFor="stock-material"
+                style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+              >
+                Stock actual <span style={{ color: '#4F46E5' }}>*</span>
+              </label>
+              <input
+                type="text"
+                name="stock"
+                id="stock-material"
+                value={materialForm.stock}
+                onChange={handleMaterialChange}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: '5px',
+                  border: formErrors.stock ? '1px solid red' : '1px solid #ddd',
+                  fontSize: '14px',
+                  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif"
+                }}
+                inputMode="numeric"
+                placeholder="Ej: 120"
+                aria-required="true"
+                aria-invalid={!!formErrors.stock}
+                aria-describedby={formErrors.stock ? "stock-error" : undefined}
+              />
+              {formErrors.stock && (
+                <p 
+                  id="stock-error"
+                  style={{ color: 'red', fontSize: '12px', margin: '4px 0 0', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+                >
+                  {formErrors.stock}
                 </p>
               )}
             </div>
             
-            <div style={{ display: 'flex', gap: '16px', marginTop: '10px' }}>
-              <input
-                type="file"
-                ref={fileInputRef}
-                style={{ display: 'none' }}
-                onChange={handleImageChange}
-                accept="image/*"
-              />
-              <input
-                type="file"
-                ref={formImageInputRef}
-                style={{ display: 'none' }}
-                onChange={handleFormImageChange}
-                accept="image/*"
-              />
-              <button 
-                type="button"
-                onClick={triggerFormImageInput}
-                disabled={isUploadingImage}
-                style={{
-                  backgroundColor: 'white',
-                  border: '1px solid #e0e0e0',
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  cursor: isUploadingImage ? 'default' : 'pointer',
-                  fontSize: '14px',
-                  color: '#555',
-                  transition: 'all 0.2s ease',
-                  fontFamily: "'Poppins', sans-serif",
-                  opacity: isUploadingImage ? 0.7 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-                onMouseEnter={(e) => !isUploadingImage && (e.currentTarget.style.transform = 'translateY(-2px)')}
-                onMouseLeave={(e) => !isUploadingImage && (e.currentTarget.style.transform = 'translateY(0)')}
+            <div style={{ flex: 1 }}>
+              <label 
+                htmlFor="stock-minimo-material"
+                style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
               >
-                {isUploadingImage ? (
-                  <>
-                    <svg className="animate-spin h-4 w-4 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Subiendo...
-                  </>
-                ) : (
-                  'Agregar foto'
-                )}
-              </button>
-              <p style={{ 
-                margin: '8px 0 0', 
-                fontSize: '12px', 
-                color: '#666', 
-                fontFamily: "'Poppins', sans-serif",
-                fontStyle: 'italic'
-              }}>
-                Formatos: JPG, PNG. Máx 5MB
-              </p>
+                Stock mínimo
+              </label>
+              <input
+                type="text"
+                name="stockMinimo"
+                id="stock-minimo-material"
+                value={materialForm.stockMinimo}
+                onChange={handleMaterialChange}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: '5px',
+                  border: '1px solid #ddd',
+                  fontSize: '14px',
+                  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif"
+                }}
+                inputMode="numeric"
+                placeholder="Ej: 30"
+              />
+            </div>
+            
+            <div style={{ flex: 1 }}>
+              <label 
+                htmlFor="precio-material"
+                style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+              >
+                Precio
+              </label>
+              <input
+                type="text"
+                name="precio"
+                id="precio-material"
+                value={materialForm.precio}
+                onChange={handleMaterialChange}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: '5px',
+                  border: formErrors.precio ? '1px solid red' : '1px solid #ddd',
+                  fontSize: '14px',
+                  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif"
+                }}
+                inputMode="decimal"
+                placeholder="Ej: 45.50"
+                aria-invalid={!!formErrors.precio}
+                aria-describedby={formErrors.precio ? "precio-error" : undefined}
+              />
+              {formErrors.precio && (
+                <p 
+                  id="precio-error"
+                  style={{ color: 'red', fontSize: '12px', margin: '4px 0 0', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+                >
+                  {formErrors.precio}
+                </p>
+              )}
             </div>
           </div>
-        </div>
+        </section>
+
+        <section aria-label="Clasificación y ubicación">
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+            <div style={{ flex: 1 }}>
+              <label 
+                htmlFor="categoria-material"
+                style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+              >
+                Categoría
+              </label>
+              <select
+                name="categoria"
+                id="categoria-material"
+                value={materialForm.categoria}
+                onChange={handleMaterialChange}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: '5px',
+                  border: '1px solid #ddd',
+                  fontSize: '14px',
+                  backgroundColor: 'white',
+                  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+                  ...selectStyle(!!materialForm.categoria)
+                }}
+              >
+                <option value="" style={{color: placeholderColor}}>Seleccionar categoría</option>
+                {categorias.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div style={{ flex: 1 }}>
+              <label 
+                htmlFor="fecha-adquisicion-material"
+                style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+              >
+                Fecha de adquisición
+              </label>
+              <input
+                type="date"
+                name="fechaAdquisicion"
+                id="fecha-adquisicion-material"
+                value={materialForm.fechaAdquisicion}
+                onChange={handleMaterialChange}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: '5px',
+                  border: '1px solid #ddd',
+                  fontSize: '14px',
+                  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+                  color: materialForm.fechaAdquisicion ? 'inherit' : placeholderColor
+                }}
+              />
+            </div>
+            
+            <div style={{ flex: 1 }}>
+              <label 
+                htmlFor="ubicacion-material"
+                style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+              >
+                Ubicación
+              </label>
+              <input
+                type="text"
+                name="ubicacion"
+                id="ubicacion-material"
+                value={materialForm.ubicacion}
+                onChange={handleMaterialChange}
+                placeholder="Almacén, estante..."
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: '5px',
+                  border: '1px solid #ddd',
+                  fontSize: '14px',
+                  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif"
+                }}
+              />
+            </div>
+          </div>
+        </section>
         
-        <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Referencia
-            </label>
-            <input
-              type="text"
-              name="referencia"
-              value={materialForm.referencia}
-              onChange={handleMaterialChange}
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: '1px solid #ddd',
-                fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            />
-          </div>
-          
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Unidades
-            </label>
-            <input
-              type="text"
-              name="unidades"
-              value={materialForm.unidades}
-              placeholder="metros, kg, litros..."
-              onChange={handleMaterialChange}
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: '1px solid #ddd',
-                fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            />
-          </div>
-          
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Proveedor
-            </label>
-            <input
-              type="text"
-              name="proveedor"
-              value={materialForm.proveedor}
-              onChange={handleMaterialChange}
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: '1px solid #ddd',
-                fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            />
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Stock actual <span style={{ color: 'red' }}>*</span>
-            </label>
-            <input
-              type="text"
-              name="stock"
-              value={materialForm.stock}
-              onChange={handleMaterialChange}
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: formErrors.stock ? '1px solid red' : '1px solid #ddd',
-                fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            />
-            {formErrors.stock && (
-              <p style={{ color: 'red', fontSize: '12px', margin: '4px 0 0', fontFamily: "'Poppins', sans-serif" }}>
-                {formErrors.stock}
-              </p>
-            )}
-          </div>
-          
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Stock mínimo
-            </label>
-            <input
-              type="text"
-              name="stockMinimo"
-              value={materialForm.stockMinimo}
-              onChange={handleMaterialChange}
-              placeholder="Cantidad para alerta"
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: '1px solid #ddd',
-                fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            />
-          </div>
-          
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Precio
-            </label>
-            <input
-              type="text"
-              name="precio"
-              value={materialForm.precio}
-              onChange={handleMaterialChange}
-              placeholder="0.00"
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: formErrors.precio ? '1px solid red' : '1px solid #ddd',
-                fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            />
-            {formErrors.precio && (
-              <p style={{ color: 'red', fontSize: '12px', margin: '4px 0 0', fontFamily: "'Poppins', sans-serif" }}>
-                {formErrors.precio}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Categoría
-            </label>
-            <select
-              name="categoria"
-              value={materialForm.categoria}
-              onChange={handleMaterialChange}
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: '1px solid #ddd',
-                fontSize: '14px',
-                backgroundColor: 'white',
-                fontFamily: "'Poppins', sans-serif"
-              }}
+        <section aria-label="Descripción">
+          <div style={{ marginBottom: '24px' }}>
+            <label 
+              htmlFor="descripcion-material"
+              style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
             >
-              <option value="">Seleccionar categoría</option>
-              {categorias.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Fecha de adquisición
+              Descripción
             </label>
-            <input
-              type="date"
-              name="fechaAdquisicion"
-              value={materialForm.fechaAdquisicion}
+            <textarea
+              name="descripcion"
+              id="descripcion-material"
+              value={materialForm.descripcion}
               onChange={handleMaterialChange}
+              placeholder="Características, observaciones, etc."
               style={{
                 width: '100%',
                 padding: '10px',
-                borderRadius: '8px',
+                borderRadius: '5px',
                 border: '1px solid #ddd',
                 fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
+                fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+                minHeight: '80px',
+                resize: 'vertical'
               }}
             />
           </div>
-          
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-              Ubicación
-            </label>
-            <input
-              type="text"
-              name="ubicacion"
-              value={materialForm.ubicacion}
-              onChange={handleMaterialChange}
-              placeholder="Almacén, estante..."
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: '1px solid #ddd',
-                fontSize: '14px',
-                fontFamily: "'Poppins', sans-serif"
-              }}
-            />
-          </div>
-        </div>
-        
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontFamily: "'Poppins', sans-serif" }}>
-            Descripción
-          </label>
-          <textarea
-            name="descripcion"
-            value={materialForm.descripcion}
-            onChange={handleMaterialChange}
-            placeholder="Características, observaciones, etc."
-            style={{
-              width: '100%',
-              padding: '10px',
-              borderRadius: '8px',
-              border: '1px solid #ddd',
-              fontSize: '14px',
-              fontFamily: "'Poppins', sans-serif",
-              minHeight: '80px',
-              resize: 'vertical'
-            }}
-          />
-        </div>
+        </section>
         
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '32px' }}>
           <button
@@ -1400,7 +1169,7 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
               color: '#666',
               border: '1px solid #e0e0e0',
               padding: '0 24px',
-              borderRadius: '8px',
+              borderRadius: '5px',
               cursor: isSaving ? 'default' : 'pointer',
               fontSize: '14px',
               fontWeight: 500,
@@ -1408,7 +1177,7 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
               transition: 'all 0.2s ease',
               display: 'flex',
               alignItems: 'center',
-              fontFamily: "'Poppins', sans-serif",
+              fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
               opacity: isSaving ? 0.7 : 1,
             }}
             onMouseEnter={(e) => !isSaving && (e.currentTarget.style.transform = 'translateY(-2px)')}
@@ -1424,7 +1193,7 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
               color: '#4F46E5',
               border: '1px solid #e0e0e0',
               padding: '0 24px',
-              borderRadius: '8px',
+              borderRadius: '5px',
               cursor: isSaving ? 'default' : 'pointer',
               fontSize: '14px',
               fontWeight: 500,
@@ -1432,18 +1201,18 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
               transition: 'all 0.2s ease',
               display: 'flex',
               alignItems: 'center',
-              fontFamily: "'Poppins', sans-serif",
+              fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
               opacity: isSaving ? 0.7 : 1,
             }}
             onMouseEnter={(e) => !isSaving && (e.currentTarget.style.transform = 'translateY(-2px)')}
             onMouseLeave={(e) => !isSaving && (e.currentTarget.style.transform = 'translateY(0)')}
+            aria-busy={isSaving}
           >
             {isSaving ? 'Guardando...' : 'Añadir material'}
           </button>
         </div>
       </form>
       
-      {/* Modal para mostrar el código QR generado */}
       {showQrModal && (
         <QRCodeModal
           qrUrl={qrCodeUrl}
@@ -1453,104 +1222,6 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
           onClose={handleCloseQrModal}
           isClosing={isQrModalClosing}
         />
-      )}
-      
-      {/* Modal para mostrar el texto extraído del PDF/imagen */}
-      {showExtractedText && (
-        <div 
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'white',
-            zIndex: 30,
-            display: 'flex',
-            flexDirection: 'column',
-            padding: '24px',
-            borderRadius: '8px',
-            opacity: isExtractedTextClosing ? 0 : 1,
-            transform: isExtractedTextClosing ? 'scale(0.95)' : 'scale(1)',
-            transition: 'all 0.3s ease-in-out',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
-            <button
-              onClick={closeExtractedTextModal}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                marginRight: '12px',
-                borderRadius: '8px',
-                padding: '4px',
-              }}
-            >
-              <ArrowLeftIcon style={{ width: '20px', height: '20px', color: '#666' }} />
-            </button>
-            <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0, fontFamily: "'Poppins', sans-serif" }}>
-              Datos extraídos del documento
-            </h2>
-          </div>
-          
-          <div 
-            style={{
-              flex: 1,
-              overflowY: 'auto',
-              border: '2px solid #4F46E5',
-              borderRadius: '8px',
-              padding: '16px',
-              backgroundColor: '#f9f9f9',
-              fontSize: '14px',
-              fontFamily: 'monospace',
-              whiteSpace: 'pre-wrap',
-              marginBottom: '20px',
-              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-            }}
-            className="apple-scrollbar"
-          >
-            {extractedText || 'No se pudo extraer texto del documento.'}
-          </div>
-          
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px' }}>
-            <div>
-              <p style={{ 
-                fontSize: '14px', 
-                color: '#16A34A', 
-                fontFamily: "'Poppins', sans-serif", 
-                margin: '0 0 8px 0' 
-              }}>
-                Los datos extraídos han sido aplicados al formulario
-              </p>
-            </div>
-            
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button
-                onClick={closeExtractedTextModal}
-                style={{
-                  backgroundColor: 'white',
-                  color: '#666',
-                  border: '1px solid #e0e0e0',
-                  padding: '0 24px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  height: '36px',
-                  transition: 'all 0.2s ease',
-                  display: 'flex',
-                  alignItems: 'center',
-                  fontFamily: "'Poppins', sans-serif",
-                }}
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

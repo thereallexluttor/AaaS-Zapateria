@@ -1,10 +1,12 @@
-import { app, BrowserWindow, Menu, ipcMain } from 'electron'
+import { app, BrowserWindow, Menu, ipcMain, dialog } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { spawn, spawnSync } from 'child_process'
-import fs from 'node:fs'
+import fs from 'node:fs/promises'
+import * as fsSync from 'node:fs'
 import os from 'node:os'
+import * as XLSX from 'xlsx'
 
 // Función auxiliar para encontrar el ejecutable de Python
 function findPythonExecutable(): string {
@@ -35,8 +37,8 @@ function findPythonExecutable(): string {
       try {
         // Verificar si el comando está disponible
         if (exe.includes('\\')) {
-          // Es una ruta completa, verificar si existe
-          if (fs.existsSync(exe)) {
+          // Es una ruta completa, verificar si existe usando sync version
+          if (fsSync.existsSync(exe)) { 
             return exe;
           }
         } else {
@@ -170,20 +172,20 @@ app.whenReady().then(() => {
     if (win) win.close()
   })
   
-  // IPC handler for saving temporary files
+  // IPC handler for saving temporary files (Keep sync for simplicity here)
   ipcMain.handle('save-temp-file', async (event, { fileName, data }) => {
     try {
       // Create a temporary directory if it doesn't exist
       const tempDir = path.join(os.tmpdir(), 'zapateria-temp');
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
+      if (!fsSync.existsSync(tempDir)) {
+        fsSync.mkdirSync(tempDir, { recursive: true }); // Use fsSync.mkdirSync
       }
       
       // Create a full path for the file
       const filePath = path.join(tempDir, fileName);
       
-      // Write the file to disk
-      fs.writeFileSync(filePath, Buffer.from(data));
+      // Write the file to disk using sync writeFileSync
+      fsSync.writeFileSync(filePath, Buffer.from(data)); // Use fsSync.writeFileSync
       
       console.log(`Temporary file saved at: ${filePath}`);
       return filePath;
@@ -207,7 +209,7 @@ app.whenReady().then(() => {
       console.log(`Services directory: ${servicesDir}`);
       
       // Verificar que el archivo existe
-      if (!fs.existsSync(scriptPath)) {
+      if (!fsSync.existsSync(scriptPath)) {
         throw new Error(`Script not found at path: ${scriptPath}`);
       }
       
@@ -250,34 +252,16 @@ app.whenReady().then(() => {
         
         // Handle process completion
         pythonProcess.on('close', (code) => {
-          if (code !== 0) {
-            console.error(`Python process exited with code ${code}, error: ${errorString}`);
-            reject(new Error(`Process exited with code ${code}: ${errorString}`));
-            return;
+          console.log(`Python process exited with code ${code}`);
+          if (code === 0) {
+            // On successful exit, resolve with the data
+            resolve(dataString.trim()); // Trim potential whitespace/newlines
+          } else {
+            // On error, reject with the error string
+            reject(new Error(errorString || `Python script exited with code ${code}`));
           }
-          
-          // Extract JSON result from output
-          try {
-            // Buscar el resultado JSON entre delimitadores
-            const startMarker = '===JSON_RESULT_START===';
-            const endMarker = '===JSON_RESULT_END===';
-            
-            const startIdx = dataString.indexOf(startMarker);
-            const endIdx = dataString.indexOf(endMarker);
-            
-            if (startIdx === -1 || endIdx === -1) {
-              reject(new Error('No se encontró el resultado JSON en la salida del proceso'));
-              return;
-            }
-            
-            const jsonStr = dataString.substring(startIdx + startMarker.length, endIdx).trim();
-            const result = JSON.parse(jsonStr);
-            
-            resolve(result);
-          } catch (error) {
-            console.error('Error parsing JSON result:', error);
-            reject(error);
-          }
+          // Clean up temporary file if needed (using sync unlinkSync)
+          // fsSync.unlinkSync(pdfPath); // Example cleanup if temp file was created
         });
         
         // Handle process error
@@ -289,6 +273,48 @@ app.whenReady().then(() => {
     } catch (error) {
       console.error('Error in OCR processing:', error);
       throw error;
+    }
+  });
+  
+  // IPC handler for Excel export
+  ipcMain.handle('export-trabajadores-excel', async (event, { headers, data }) => {
+    try {
+      // Show save dialog to get the file path
+      const { canceled, filePath } = await dialog.showSaveDialog({
+        title: 'Guardar Trabajadores en Excel',
+        defaultPath: 'trabajadores.xlsx',
+        filters: [
+          { name: 'Excel Files', extensions: ['xlsx'] },
+          { name: 'All Files', extensions: ['*'] }
+        ]
+      });
+
+      if (canceled || !filePath) {
+        console.log('Export cancelled by user.');
+        return { success: false, message: 'Exportación cancelada por el usuario.' };
+      }
+
+      console.log(`Attempting to save Excel file to: ${filePath}`);
+
+      // Create worksheet
+      // Note: json_to_sheet expects an array of objects. 
+      // Ensure the data passed from the renderer is in this format.
+      const worksheet = XLSX.utils.json_to_sheet(data, { header: headers });
+      
+      // Create workbook
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Trabajadores');
+
+      // Write the file using buffer and fs.writeFile
+      const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+      await fs.writeFile(filePath, buffer);
+
+      console.log(`Excel file saved successfully to: ${filePath}`);
+      return { success: true, message: 'Archivo Excel guardado con éxito.', filePath };
+
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      return { success: false, message: `Error al exportar a Excel: ${(error as Error).message}` };
     }
   });
   
@@ -305,7 +331,7 @@ app.whenReady().then(() => {
       console.log(`Script path: ${scriptPath}`);
       
       // Verificar que el archivo existe
-      if (!fs.existsSync(scriptPath)) {
+      if (!fsSync.existsSync(scriptPath)) {
         throw new Error(`Script not found at path: ${scriptPath}`);
       }
       
@@ -401,7 +427,7 @@ app.whenReady().then(() => {
       console.log(`Script path: ${scriptPath}`);
       
       // Verificar que el archivo existe
-      if (!fs.existsSync(scriptPath)) {
+      if (!fsSync.existsSync(scriptPath)) {
         throw new Error(`Script not found at path: ${scriptPath}`);
       }
       
@@ -495,18 +521,18 @@ app.whenReady().then(() => {
       
       // Crear un archivo temporal con el texto
       const tempDir = path.join(os.tmpdir(), 'zapateria-temp');
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
+      if (!fsSync.existsSync(tempDir)) {
+        fsSync.mkdirSync(tempDir, { recursive: true }); // Use fsSync.mkdirSync
       }
       
       const tempFile = path.join(tempDir, `text_${Date.now()}.txt`);
-      fs.writeFileSync(tempFile, rawText, 'utf8');
+      fsSync.writeFileSync(tempFile, rawText, 'utf8'); // Use fsSync.writeFileSync
       
       // Importar directamente gemma_agent_producto.py
       const scriptPath = path.join(appRootPath, 'ai_service', 'services', 'gemma_agent_producto.py');
       
       // Verificar que el archivo existe
-      if (!fs.existsSync(scriptPath)) {
+      if (!fsSync.existsSync(scriptPath)) {
         throw new Error(`Script not found at path: ${scriptPath}`);
       }
       
@@ -536,9 +562,9 @@ else:
 print("===JSON_RESULT_END===")
 `;
         
-        // Guardar código en archivo temporal
+        // Guardar código en archivo temporal using sync writeFileSync
         const tempCodeFile = path.join(tempDir, `temp_code_${Date.now()}.py`);
-        fs.writeFileSync(tempCodeFile, code, 'utf8');
+        fsSync.writeFileSync(tempCodeFile, code, 'utf8'); // Use fsSync.writeFileSync
         
         // Configurar variables de entorno para Python
         const env = { 
@@ -570,14 +596,6 @@ print("===JSON_RESULT_END===")
         
         // Handle process completion
         pythonProcess.on('close', (code) => {
-          try {
-            // Limpiar archivos temporales
-            fs.unlinkSync(tempFile);
-            fs.unlinkSync(tempCodeFile);
-          } catch (e) {
-            console.error('Error cleaning temporary files:', e);
-          }
-          
           if (code !== 0) {
             console.error(`Python process exited with code ${code}, error: ${errorString}`);
             reject(new Error(`Process exited with code ${code}: ${errorString}`));
@@ -631,18 +649,18 @@ print("===JSON_RESULT_END===")
       
       // Crear un archivo temporal con el texto
       const tempDir = path.join(os.tmpdir(), 'zapateria-temp');
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
+      if (!fsSync.existsSync(tempDir)) {
+        fsSync.mkdirSync(tempDir, { recursive: true }); // Use fsSync.mkdirSync
       }
       
       const tempFile = path.join(tempDir, `text_${Date.now()}.txt`);
-      fs.writeFileSync(tempFile, rawText, 'utf8');
+      fsSync.writeFileSync(tempFile, rawText, 'utf8'); // Use fsSync.writeFileSync
       
       // Importar directamente gemma_agent_material.py
       const scriptPath = path.join(appRootPath, 'ai_service', 'services', 'gemma_agent_material.py');
       
       // Verificar que el archivo existe
-      if (!fs.existsSync(scriptPath)) {
+      if (!fsSync.existsSync(scriptPath)) {
         throw new Error(`Script not found at path: ${scriptPath}`);
       }
       
@@ -672,9 +690,9 @@ else:
 print("===JSON_RESULT_END===")
 `;
         
-        // Guardar código en archivo temporal
+        // Guardar código en archivo temporal using sync writeFileSync
         const tempCodeFile = path.join(tempDir, `temp_code_${Date.now()}.py`);
-        fs.writeFileSync(tempCodeFile, code, 'utf8');
+        fsSync.writeFileSync(tempCodeFile, code, 'utf8'); // Use fsSync.writeFileSync
         
         // Configurar variables de entorno para Python
         const env = { 
@@ -706,14 +724,6 @@ print("===JSON_RESULT_END===")
         
         // Handle process completion
         pythonProcess.on('close', (code) => {
-          try {
-            // Limpiar archivos temporales
-            fs.unlinkSync(tempFile);
-            fs.unlinkSync(tempCodeFile);
-          } catch (e) {
-            console.error('Error cleaning temporary files:', e);
-          }
-          
           if (code !== 0) {
             console.error(`Python process exited with code ${code}, error: ${errorString}`);
             reject(new Error(`Process exited with code ${code}: ${errorString}`));
