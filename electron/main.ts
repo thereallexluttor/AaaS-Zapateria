@@ -318,6 +318,46 @@ app.whenReady().then(() => {
     }
   });
   
+  // IPC handler for exporting clientes to Excel
+  ipcMain.handle('export-clientes-excel', async (event, { headers, data }) => {
+    try {
+      // Show save dialog to get the file path
+      const { canceled, filePath } = await dialog.showSaveDialog({
+        title: 'Guardar Clientes en Excel',
+        defaultPath: 'clientes.xlsx',
+        filters: [
+          { name: 'Excel Files', extensions: ['xlsx'] },
+          { name: 'All Files', extensions: ['*'] }
+        ]
+      });
+
+      if (canceled || !filePath) {
+        console.log('Export cancelled by user.');
+        return { success: false, message: 'Exportación cancelada por el usuario.' };
+      }
+
+      console.log(`Attempting to save Excel file to: ${filePath}`);
+
+      // Create worksheet
+      const worksheet = XLSX.utils.json_to_sheet(data, { header: headers });
+      
+      // Create workbook
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Clientes');
+
+      // Write the file using buffer and fs.writeFile
+      const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+      await fs.writeFile(filePath, buffer);
+
+      console.log(`Excel file saved successfully to: ${filePath}`);
+      return { success: true, message: 'Archivo Excel guardado con éxito.', filePath };
+
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      return { success: false, message: `Error al exportar a Excel: ${(error as Error).message}` };
+    }
+  });
+  
   // IPC handler para OCR de productos
   ipcMain.handle('process-producto-ocr', async (event, filePath) => {
     try {

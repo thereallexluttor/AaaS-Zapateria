@@ -7,7 +7,8 @@ const validChannels = [
   'save-settings',
   'load-settings',
   'process-image-ocr',
-  'export-trabajadores-excel' // Add channel for Excel export
+  'export-trabajadores-excel', // Add channel for Excel export
+  'export-clientes-excel' // Add channel for exporting clientes to Excel
 ];
 
 // Expose protected methods that allow the renderer process to use

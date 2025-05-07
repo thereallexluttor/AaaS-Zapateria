@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { PlusCircleIcon, ArrowDownTrayIcon, PrinterIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { PlusCircleIcon, ArrowDownTrayIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import ClienteFormComponent from '../components/ClienteForm';
 import ClienteItem, { ClienteItemType } from '../components/ClienteItem';
 import { useClientes } from '../lib/hooks';
@@ -15,6 +15,9 @@ function Clientes() {
   const [selectedCliente, setSelectedCliente] = useState<ClienteItemType | null>(null);
   const [itemsVisible, setItemsVisible] = useState(true);
   const [activeTab, setActiveTab] = useState<FilterTab>('todos');
+  
+  // State for selected clients
+  const [selectedClientes, setSelectedClientes] = useState<Set<string>>(new Set());
   
   // Referencia para guardar el último término de búsqueda que se envió a la API
   const lastSearchTermRef = useRef<string>('');
@@ -171,8 +174,109 @@ function Clientes() {
     type: 'cliente'
   }));
   
+  // Handle selecting/deselecting a single cliente
+  const handleSelectCliente = useCallback((id: string, isSelected: boolean) => {
+    setSelectedClientes(prevSelected => {
+      const newSelected = new Set(prevSelected);
+      if (isSelected) {
+        newSelected.add(id);
+      } else {
+        newSelected.delete(id);
+      }
+      return newSelected;
+    });
+  }, []);
+
+  // Handle selecting/deselecting all currently visible clientes
+  const handleSelectAll = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const isChecked = e.target.checked;
+    const currentVisibleIds = clienteItems
+      .map(c => c.id)
+      .filter((id): id is string => id !== undefined); // Filtrar posibles undefined
+    
+    setSelectedClientes(prevSelected => {
+      const newSelected = new Set(prevSelected);
+      if (isChecked) {
+        currentVisibleIds.forEach(id => newSelected.add(id));
+      } else {
+        currentVisibleIds.forEach(id => newSelected.delete(id));
+      }
+      return newSelected;
+    });
+  }, [clienteItems]);
+
+  // Determine if "Select All" checkbox should be checked
+  const isAllSelected = clienteItems.length > 0 && 
+    clienteItems.every(c => c.id !== undefined && selectedClientes.has(c.id));
+  
+  // Handler for export button
+  const handleExport = useCallback(async () => {
+    const selectedIds = Array.from(selectedClientes);
+    console.log('Exporting selected cliente IDs:', selectedIds);
+
+    // Get full data for selected clients from the original list
+    const selectedData = clientes.filter(c => c.id !== undefined && selectedIds.includes(c.id));
+
+    if (selectedData.length === 0) {
+      console.log('No data selected for export.');
+      // Optionally show a message to the user
+      return;
+    }
+
+    // Define headers (customize as needed)
+    const headers = [
+      'id', 'nombre', 'apellidos', 'tipo_cliente', 'email', 'telefono', 
+      'direccion', 'ciudad', 'codigo_postal', 'fecha_registro',
+      'nombre_compania', 'contacto_nombre', 'contacto_email', 'contacto_telefono'
+    ];
+
+    // Prepare data in the format needed by xlsx.utils.json_to_sheet
+    const excelData = selectedData.map(cliente => {
+      const row: Record<string, any> = {};
+      headers.forEach(header => {
+        // Handle potentially undefined fields
+        row[header] = (cliente as any)[header] ?? ''; 
+      });
+      return row;
+    });
+    
+    try {
+      console.log('Sending export request to main process...');
+      // Use the exposed electronAPI from preload script
+      const result = await window.electronAPI.invoke('export-clientes-excel', { 
+        headers,
+        data: excelData 
+      });
+      
+      console.log('Export result from main process:', result);
+
+      if (result.success) {
+        console.log(`Export successful: ${result.message} (${result.filePath})`);
+        // Optionally show a success notification to the user
+        alert(`Exportación exitosa: ${result.message}\nGuardado en: ${result.filePath}`);
+      } else {
+        console.error(`Export failed: ${result.message}`);
+        // Optionally show an error notification to the user
+        alert(`Error en la exportación: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('Error invoking Excel export IPC:', error);
+      alert(`Error de comunicación al exportar: ${(error as Error).message}`);
+    }
+
+  }, [selectedClientes, clientes]);
+  
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', padding: '24px', fontFamily: "'Poppins', sans-serif" }}>
+    <div style={{ 
+      position: 'relative', 
+      width: '100%', 
+      height: '100%', 
+      padding: '24px 24px 0 24px', 
+      fontFamily: "'Poppins', sans-serif",
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
       {/* Barra de búsqueda */}
       <div style={{ position: 'relative', marginBottom: '24px' }}>
         <div style={{ 
@@ -207,6 +311,39 @@ function Clientes() {
           onFocus={(e) => e.target.style.borderColor = '#4F46E5'}
           onBlur={(e) => e.target.style.borderColor = '#E5E7EB'}
         />
+      </div>
+      
+      {/* Header Row with Select All */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '10px',
+        padding: '0 8px' // Align with item padding
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <input 
+            type="checkbox"
+            checked={isAllSelected}
+            onChange={handleSelectAll}
+            disabled={clienteItems.length === 0}
+            style={{ cursor: 'pointer' }}
+            title={isAllSelected ? "Deseleccionar todos" : "Seleccionar todos"}
+          />
+          <label 
+            style={{ fontSize: '14px', color: '#6B7280', cursor: 'pointer' }} 
+            onClick={(e) => { 
+              const checkbox = (e.target as HTMLLabelElement).previousElementSibling;
+              if (checkbox instanceof HTMLInputElement) {
+                checkbox.click();
+              }
+            }}
+          >
+            Seleccionar Todos ({selectedClientes.size} seleccionados)
+          </label>
+        </div>
+
+        {/* Placeholder for potential header actions/sorting */}
       </div>
       
       {/* Título con contador */}
@@ -248,12 +385,15 @@ function Clientes() {
       {/* Lista de clientes */}
       <div 
         style={{ 
-          maxHeight: 'calc(100vh - 250px)', 
+          flex: '1 1 auto',
+          minHeight: '200px',
           overflowY: 'auto', 
           position: 'relative',
-          marginBottom: '20px'
+          marginBottom: '0px',
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#c1c1c1 #f1f1f1',
         }} 
-        className="apple-scrollbar"
+        className="custom-scrollbar"
       >
         {/* Mostrar mensaje de carga */}
         {loading && (
@@ -279,6 +419,7 @@ function Clientes() {
             opacity: itemsVisible ? 1 : 0,
             transform: itemsVisible ? 'translateY(0)' : 'translateY(10px)',
             transition: 'opacity 0.3s ease, transform 0.3s ease',
+            padding: '4px'
           }}
         >
           {!loading && clienteItems.length === 0 ? (
@@ -294,15 +435,23 @@ function Clientes() {
               }
             </div>
           ) : !loading && (
-            <div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
               {clienteItems.map(cliente => (
                 <div key={cliente.id} className="cliente-item-wrapper">
                   <ClienteItem
                     cliente={cliente}
                     onViewDetails={handleViewDetails}
+                    isSelected={cliente.id !== undefined && selectedClientes.has(cliente.id)}
+                    onSelect={(cliente, selected) => {
+                      if (cliente.id !== undefined) {
+                        handleSelectCliente(cliente.id, selected);
+                      }
+                    }}
                   />
                 </div>
               ))}
+              {/* Espacio adicional para scroll */}
+              <div style={{ height: '100px' }}></div>
             </div>
           )}
         </div>
@@ -325,6 +474,8 @@ function Clientes() {
       >
         {/* Botón Exportar */}
         <button 
+          onClick={handleExport}
+          disabled={selectedClientes.size === 0}
           style={{
             height: '36px',
             backgroundColor: 'white',
@@ -334,55 +485,26 @@ function Clientes() {
             display: 'flex',
             alignItems: 'center',
             padding: '0 16px',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
+            cursor: selectedClientes.size === 0 ? 'not-allowed' : 'pointer',
             color: '#1a1a1a',
             fontSize: '14px',
             fontWeight: 200,
             fontFamily: "'Poppins', sans-serif",
+            opacity: selectedClientes.size === 0 ? 0.5 : 1,
           }}
           onMouseEnter={(e) => {
+            if (selectedClientes.size === 0) return;
             e.currentTarget.style.transform = 'translateY(-2px)';
             e.currentTarget.style.borderColor = '#D1D5DB';
           }}
           onMouseLeave={(e) => {
+            if (selectedClientes.size === 0) return;
             e.currentTarget.style.transform = 'translateY(0)';
             e.currentTarget.style.borderColor = '#E5E7EB';
           }}
         >
           <ArrowDownTrayIcon style={{ width: '20px', height: '20px', marginRight: '8px' }} />
           Exportar
-        </button>
-        
-        {/* Botón Imprimir */}
-        <button 
-          style={{
-            height: '36px',
-            backgroundColor: 'white',
-            borderRadius: '6px',
-            boxShadow: 'none',
-            border: '1px solid #E5E7EB',
-            display: 'flex',
-            alignItems: 'center',
-            padding: '0 16px',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            color: '#1a1a1a',
-            fontSize: '14px',
-            fontWeight: 200,
-            fontFamily: "'Poppins', sans-serif",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.borderColor = '#D1D5DB';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.borderColor = '#E5E7EB';
-          }}
-        >
-          <PrinterIcon style={{ width: '20px', height: '20px', marginRight: '8px' }} />
-          Imprimir
         </button>
         
         {/* Botón Nuevo Cliente */}

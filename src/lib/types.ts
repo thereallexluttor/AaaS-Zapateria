@@ -16,15 +16,18 @@ export interface Producto {
   id: number;
   nombre: string;
   precio: number;
-  stock: number;
-  stock_minimo: number;
-  categoria: string;
-  descripcion: string;
-  tallas: string;
-  colores: string;
-  tiempo_fabricacion: string;
+  categoria: string | null;
+  descripcion: string | null;
+  materiales: string[];
+  herramientas: string[];
+  tallas: { numero: string; stock: number; stockMinimo: number }[];
+  colores: string | null;
+  tiempo_fabricacion: number | null;
+  pasos_produccion: number | null;
   destacado: boolean;
   imagen_url: string | null;
+  qr_code: string | null;
+  created_at: string | null;
 }
 
 // Tipo para los datos del formulario de pedido
@@ -32,7 +35,7 @@ export interface PedidoFormData {
   cliente: string;
   fechaInicio: string;
   fechaEntrega: string;
-  estado: 'pendiente' | 'en_proceso' | 'completado';
+  estado: 'Pendiente' | 'Completada' | 'Cancelada';
   observaciones: string;
   productos: ProductoSeleccionado[];
   // Campos para ventas

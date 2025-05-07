@@ -175,7 +175,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
     <div 
       style={{
         backgroundColor: 'white',
-        borderRadius: '12px',
+        borderRadius: '5px',
         width: '100%',
         maxWidth: '680px',
         maxHeight: '90vh',
@@ -216,7 +216,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
-            borderRadius: '4px',
+            borderRadius: '5px',
             color: '#6B7280',
             transition: 'background-color 0.2s ease'
           }}
@@ -277,7 +277,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
                     width: '100%',
                     padding: '10px 12px',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     fontSize: '14px',
                     transition: 'border-color 0.2s ease',
                     outline: 'none'
@@ -312,7 +312,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
                     width: '100%',
                     padding: '10px 12px',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     fontSize: '14px',
                     transition: 'border-color 0.2s ease',
                     outline: 'none'
@@ -347,7 +347,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
                     width: '100%',
                     padding: '10px 12px',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     fontSize: '14px',
                     transition: 'border-color 0.2s ease',
                     outline: 'none'
@@ -382,7 +382,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
                     width: '100%',
                     padding: '10px 12px',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     fontSize: '14px',
                     transition: 'border-color 0.2s ease',
                     outline: 'none'
@@ -435,7 +435,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
                     width: '100%',
                     padding: '10px 12px',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     fontSize: '14px',
                     transition: 'border-color 0.2s ease',
                     outline: 'none'
@@ -469,7 +469,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
                     width: '100%',
                     padding: '10px 12px',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     fontSize: '14px',
                     transition: 'border-color 0.2s ease',
                     outline: 'none'
@@ -503,7 +503,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
                     width: '100%',
                     padding: '10px 12px',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     fontSize: '14px',
                     transition: 'border-color 0.2s ease',
                     outline: 'none'
@@ -556,7 +556,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
                     width: '100%',
                     padding: '10px 12px',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     fontSize: '14px',
                     transition: 'border-color 0.2s ease',
                     outline: 'none'
@@ -589,7 +589,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
                     width: '100%',
                     padding: '10px 12px',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     fontSize: '14px',
                     transition: 'border-color 0.2s ease',
                     outline: 'none',
@@ -628,7 +628,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
                     width: '100%',
                     padding: '10px 12px',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     fontSize: '14px',
                     transition: 'border-color 0.2s ease',
                     outline: 'none',
@@ -675,7 +675,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
                     width: '100%',
                     padding: '10px 12px',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     fontSize: '14px',
                     transition: 'border-color 0.2s ease',
                     outline: 'none'
@@ -708,7 +708,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
                     width: '100%',
                     padding: '10px 12px',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     fontSize: '14px',
                     transition: 'border-color 0.2s ease',
                     outline: 'none',
@@ -749,7 +749,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
                     width: '100%',
                     padding: '10px 12px',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     fontSize: '14px',
                     transition: 'border-color 0.2s ease',
                     outline: 'none'
@@ -786,7 +786,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
                     width: '100%',
                     padding: '10px 12px',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     fontSize: '14px',
                     transition: 'border-color 0.2s ease',
                     outline: 'none'
@@ -815,7 +815,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
                 color: '#111827',
                 border: '1px solid #E5E7EB',
                 padding: '0 24px',
-                borderRadius: '8px',
+                borderRadius: '5px',
                 cursor: 'pointer',
                 fontSize: '14px',
                 fontWeight: 500,
@@ -844,7 +844,7 @@ function TrabajadorFormComponent({ onClose, onSave, trabajadorToEdit, isClosing 
                 color: '#4F46E5',
                 border: '1px solid #E5E7EB',
                 padding: '0 24px',
-                borderRadius: '8px',
+                borderRadius: '5px',
                 cursor: 'pointer',
                 fontSize: '14px',
                 fontWeight: 500,
