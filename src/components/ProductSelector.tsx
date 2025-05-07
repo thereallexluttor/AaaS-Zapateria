@@ -1,6 +1,23 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Producto, ProductoSeleccionado } from '../lib/types';
+import { ProductoSeleccionado } from '../lib/types';
+
+interface Producto {
+  id: number;
+  nombre: string;
+  precio: number;
+  categoria: string | null;
+  descripcion: string | null;
+  materiales: string[];
+  herramientas: string[];
+  tallas: { numero: string; stock: number; stockMinimo: number }[];
+  colores: string | null;
+  tiempo_fabricacion: number | null;
+  destacado: boolean;
+  imagen_url: string | null;
+  qr_code: string | null;
+  created_at: string | null;
+}
 
 interface ProductSelectorProps {
   onProductSelect: (producto: ProductoSeleccionado) => void;
@@ -22,7 +39,7 @@ function ProductSelector({ onProductSelect, onProductRemove, productosSelecciona
       setLoading(true);
       try {
         const { data, error } = await supabase
-          .from('productos')
+          .from('productos_table')
           .select('*')
           .order('nombre');
         
@@ -40,14 +57,22 @@ function ProductSelector({ onProductSelect, onProductRemove, productosSelecciona
 
   const productosFiltrados = productos;
 
-  // Parsear tallas y colores del string formato {valor1, valor2}
-  const parsearOpciones = (opciones: string): string[] => {
+  // Parsear tallas y colores
+  const parsearOpciones = (opciones: any): string[] => {
     if (!opciones) return [];
-    // Eliminar los corchetes y separar por comas
-    return opciones
-      .replace(/{|}/g, '')
-      .split(',')
-      .map(opcion => opcion.trim());
+    
+    if (Array.isArray(opciones)) {
+      return opciones.map(opcion => opcion.numero);
+    }
+    
+    if (typeof opciones === 'string') {
+      return opciones
+        .replace(/{|}/g, '')
+        .split(',')
+        .map(opcion => opcion.trim());
+    }
+    
+    return [];
   };
 
   // Manejar cambio de producto seleccionado
@@ -66,12 +91,12 @@ function ProductSelector({ onProductSelect, onProductRemove, productosSelecciona
     }
   };
 
-  // Manejar cambio en la selección de talla (ahora solo una)
+  // Manejar cambio en la selección de talla
   const handleTallaChange = (talla: string) => {
     setTallaSeleccionada(talla);
   };
 
-  // Manejar cambio en la selección de color (ahora solo uno)
+  // Manejar cambio en la selección de color
   const handleColorChange = (color: string) => {
     setColorSeleccionado(color);
   };
@@ -91,7 +116,7 @@ function ProductSelector({ onProductSelect, onProductRemove, productosSelecciona
     }
 
     const tallas = parsearOpciones(productoSeleccionado.tallas);
-    const colores = parsearOpciones(productoSeleccionado.colores);
+    const colores = productoSeleccionado.colores ? productoSeleccionado.colores.split(',').map(c => c.trim()) : [];
     
     const nuevoProducto: ProductoSeleccionado = {
       id: productoSeleccionado.id,
@@ -158,7 +183,7 @@ function ProductSelector({ onProductSelect, onProductRemove, productosSelecciona
             ) : (
               productosFiltrados.map((producto) => (
                 <option key={producto.id} value={producto.id}>
-                  {producto.nombre} - ${producto.precio} ({producto.stock} en stock)
+                  {producto.nombre} - ${producto.precio} ({producto.tallas.reduce((total, t) => total + (t.stock < 0 ? 0 : t.stock), 0)} en stock)
                 </option>
               ))
             )}
@@ -179,10 +204,11 @@ function ProductSelector({ onProductSelect, onProductRemove, productosSelecciona
                 <label
                   style={{
                     display: 'block',
-                    marginBottom: '6px',
+                    marginBottom: '10px',
                     fontSize: '14px',
-                    color: '#374151',
-                    fontWeight: 500
+                    color: '#111827',
+                    fontWeight: 500,
+                    letterSpacing: '0.01em'
                   }}
                 >
                   2. Selecciona una talla
@@ -192,32 +218,60 @@ function ProductSelector({ onProductSelect, onProductRemove, productosSelecciona
                   flexWrap: 'wrap', 
                   gap: '8px',
                   backgroundColor: 'white',
-                  padding: '10px',
-                  borderRadius: '6px',
-                  border: '1px solid #E5E7EB',
-                  minHeight: '100px'
+                  padding: '20px',
+                  borderRadius: '12px',
+                  minHeight: '90px',
+                  alignItems: 'center'
                 }}>
-                  {parsearOpciones(productoSeleccionado.tallas).map((talla) => (
-                    <div
-                      key={talla}
-                      onClick={() => handleTallaChange(talla)}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: '4px',
-                        border: '1px solid #E5E7EB',
-                        cursor: 'pointer',
-                        backgroundColor: tallaSeleccionada === talla ? '#4F46E5' : 'white',
-                        color: tallaSeleccionada === talla ? 'white' : '#374151',
-                        fontSize: '13px'
-                      }}
-                    >
-                      {talla}
-                    </div>
-                  ))}
+                  {productoSeleccionado.tallas.map((talla) => {
+                    const sinStock = talla.stock <= 0;
+                    
+                    return (
+                      <div
+                        key={talla.numero}
+                        onClick={() => !sinStock && handleTallaChange(talla.numero)}
+                        style={{
+                          borderRadius: '8px',
+                          cursor: sinStock ? 'not-allowed' : 'pointer',
+                          backgroundColor: 'white',
+                          color: sinStock 
+                            ? '#D1D5DB' 
+                            : tallaSeleccionada === talla.numero 
+                              ? '#000000' 
+                              : '#525252',
+                          fontSize: '14px',
+                          fontWeight: tallaSeleccionada === talla.numero ? 500 : 400,
+                          letterSpacing: '0.01em',
+                          transition: 'all 0.25s ease',
+                          display: 'flex',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          height: '38px',
+                          width: '52px',
+                          border: `1px solid ${
+                            sinStock 
+                              ? '#F3F4F6' 
+                              : tallaSeleccionada === talla.numero 
+                                ? '#000000' 
+                                : '#E5E7EB'
+                          }`,
+                          userSelect: 'none',
+                        }}
+                      >
+                        {talla.numero}
+                      </div>
+                    );
+                  })}
                 </div>
                 {!tallaSeleccionada && (
-                  <div style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '4px' }}>
-                    * Debes seleccionar una talla
+                  <div style={{ 
+                    fontSize: '12px', 
+                    color: '#6B7280', 
+                    marginTop: '10px', 
+                    fontWeight: 400,
+                    letterSpacing: '0.01em'
+                  }}>
+                    Selecciona una talla disponible
                   </div>
                 )}
               </div>
@@ -227,10 +281,11 @@ function ProductSelector({ onProductSelect, onProductRemove, productosSelecciona
                 <label
                   style={{
                     display: 'block',
-                    marginBottom: '6px',
+                    marginBottom: '10px',
                     fontSize: '14px',
-                    color: '#374151',
-                    fontWeight: 500
+                    color: '#111827',
+                    fontWeight: 500,
+                    letterSpacing: '0.01em'
                   }}
                 >
                   3. Selecciona un color
@@ -240,32 +295,51 @@ function ProductSelector({ onProductSelect, onProductRemove, productosSelecciona
                   flexWrap: 'wrap', 
                   gap: '8px',
                   backgroundColor: 'white',
-                  padding: '10px',
-                  borderRadius: '6px',
-                  border: '1px solid #E5E7EB',
-                  minHeight: '100px'
+                  padding: '20px',
+                  borderRadius: '12px',
+                  minHeight: '90px',
+                  alignItems: 'center'
                 }}>
-                  {parsearOpciones(productoSeleccionado.colores).map((color) => (
-                    <div
-                      key={color}
-                      onClick={() => handleColorChange(color)}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: '4px',
-                        border: '1px solid #E5E7EB',
-                        cursor: 'pointer',
-                        backgroundColor: colorSeleccionado === color ? '#4F46E5' : 'white',
-                        color: colorSeleccionado === color ? 'white' : '#374151',
-                        fontSize: '13px'
-                      }}
-                    >
-                      {color}
-                    </div>
-                  ))}
+                  {productoSeleccionado.colores?.split(',').map((color) => {
+                    const colorTrimmed = color.trim();
+                    
+                    return (
+                      <div
+                        key={colorTrimmed}
+                        onClick={() => handleColorChange(colorTrimmed)}
+                        style={{
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          backgroundColor: 'white',
+                          color: colorSeleccionado === colorTrimmed ? '#000000' : '#525252',
+                          fontSize: '14px',
+                          fontWeight: colorSeleccionado === colorTrimmed ? 500 : 400,
+                          letterSpacing: '0.01em',
+                          transition: 'all 0.25s ease',
+                          display: 'flex',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          height: '38px',
+                          padding: '0 16px',
+                          minWidth: '40px',
+                          border: `1px solid ${colorSeleccionado === colorTrimmed ? '#000000' : '#E5E7EB'}`,
+                          userSelect: 'none',
+                        }}
+                      >
+                        {colorTrimmed}
+                      </div>
+                    );
+                  })}
                 </div>
                 {!colorSeleccionado && (
-                  <div style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '4px' }}>
-                    * Debes seleccionar un color
+                  <div style={{ 
+                    fontSize: '12px', 
+                    color: '#6B7280', 
+                    marginTop: '10px',
+                    fontWeight: 400,
+                    letterSpacing: '0.01em'
+                  }}>
+                    Selecciona un color para tu producto
                   </div>
                 )}
               </div>

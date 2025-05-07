@@ -133,7 +133,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
     <div 
       style={{
         backgroundColor: 'white',
-        borderRadius: '8px',
+        borderRadius: '5px',
         padding: '24px',
         width: '820px',
         maxWidth: '95%',
@@ -159,7 +159,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
               display: 'flex',
               alignItems: 'center',
               marginRight: '12px',
-              borderRadius: '8px',
+              borderRadius: '5px',
               padding: '4px',
             }}
           >
@@ -188,7 +188,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
               justifyContent: 'center',
               backgroundColor: clienteType === 'persona' ? '#F3F4FF' : 'white',
               border: `1px solid ${clienteType === 'persona' ? '#4F46E5' : '#e0e0e0'}`,
-              borderRadius: '8px',
+              borderRadius: '5px',
               color: clienteType === 'persona' ? '#4F46E5' : '#666',
               fontWeight: clienteType === 'persona' ? 500 : 400,
               cursor: 'pointer',
@@ -211,7 +211,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
               justifyContent: 'center',
               backgroundColor: clienteType === 'compania' ? '#F3F4FF' : 'white',
               border: `1px solid ${clienteType === 'compania' ? '#4F46E5' : '#e0e0e0'}`,
-              borderRadius: '8px',
+              borderRadius: '5px',
               color: clienteType === 'compania' ? '#4F46E5' : '#666',
               fontWeight: clienteType === 'compania' ? 500 : 400,
               cursor: 'pointer',
@@ -232,7 +232,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
           backgroundColor: 'rgba(220, 38, 38, 0.1)', 
           color: '#DC2626', 
           padding: '12px', 
-          borderRadius: '8px',
+          borderRadius: '5px',
           marginBottom: '16px',
           fontSize: '14px',
           fontFamily: "'Poppins', sans-serif"
@@ -262,7 +262,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
                 style={{
                   width: '100%',
                   padding: '10px',
-                  borderRadius: '8px',
+                  borderRadius: '5px',
                   border: '1px solid #ddd',
                   fontSize: '14px',
                   fontFamily: "'Poppins', sans-serif"
@@ -288,7 +288,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
                 style={{
                   width: '100%',
                   padding: '10px',
-                  borderRadius: '8px',
+                  borderRadius: '5px',
                   border: '1px solid #ddd',
                   fontSize: '14px',
                   fontFamily: "'Poppins', sans-serif"
@@ -316,7 +316,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
                 style={{
                   width: '100%',
                   padding: '10px',
-                  borderRadius: '8px',
+                  borderRadius: '5px',
                   border: '1px solid #ddd',
                   fontSize: '14px',
                   fontFamily: "'Poppins', sans-serif"
@@ -346,7 +346,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
               style={{
                 width: '100%',
                 padding: '10px',
-                borderRadius: '8px',
+                borderRadius: '5px',
                 border: '1px solid #ddd',
                 fontSize: '14px',
                 fontFamily: "'Poppins', sans-serif"
@@ -371,7 +371,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
               style={{
                 width: '100%',
                 padding: '10px',
-                borderRadius: '8px',
+                borderRadius: '5px',
                 border: '1px solid #ddd',
                 fontSize: '14px',
                 fontFamily: "'Poppins', sans-serif"
@@ -382,7 +382,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
 
         {/* Campos específicos para compañía - Persona de contacto */}
         {clienteType === 'compania' && (
-          <div style={{ marginBottom: '16px', border: '1px solid #E5E7EB', borderRadius: '8px', padding: '16px' }}>
+          <div style={{ marginBottom: '16px', border: '1px solid #E5E7EB', borderRadius: '5px', padding: '16px' }}>
             <h3 style={{ fontSize: '16px', fontWeight: 500, marginTop: 0, marginBottom: '16px', color: '#4F46E5' }}>
               Persona responsable de compras
             </h3>
@@ -405,7 +405,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
                   style={{
                     width: '100%',
                     padding: '10px',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     border: '1px solid #ddd',
                     fontSize: '14px',
                     fontFamily: "'Poppins', sans-serif"
@@ -431,7 +431,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
                   style={{
                     width: '100%',
                     padding: '10px',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     border: '1px solid #ddd',
                     fontSize: '14px',
                     fontFamily: "'Poppins', sans-serif"
@@ -458,7 +458,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
                   style={{
                     width: '100%',
                     padding: '10px',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     border: '1px solid #ddd',
                     fontSize: '14px',
                     fontFamily: "'Poppins', sans-serif"
@@ -483,7 +483,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
                   style={{
                     width: '100%',
                     padding: '10px',
-                    borderRadius: '8px',
+                    borderRadius: '5px',
                     border: '1px solid #ddd',
                     fontSize: '14px',
                     fontFamily: "'Poppins', sans-serif"
@@ -511,7 +511,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
             style={{
               width: '100%',
               padding: '10px',
-              borderRadius: '8px',
+              borderRadius: '5px',
               border: '1px solid #ddd',
               fontSize: '14px',
               fontFamily: "'Poppins', sans-serif"
@@ -537,7 +537,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
               style={{
                 width: '100%',
                 padding: '10px',
-                borderRadius: '8px',
+                borderRadius: '5px',
                 border: '1px solid #ddd',
                 fontSize: '14px',
                 fontFamily: "'Poppins', sans-serif"
@@ -562,7 +562,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
               style={{
                 width: '100%',
                 padding: '10px',
-                borderRadius: '8px',
+                borderRadius: '5px',
                 border: '1px solid #ddd',
                 fontSize: '14px',
                 fontFamily: "'Poppins', sans-serif"
@@ -588,7 +588,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
             style={{
               width: '100%',
               padding: '10px',
-              borderRadius: '8px',
+              borderRadius: '5px',
               border: '1px solid #ddd',
               fontSize: '14px',
               fontFamily: "'Poppins', sans-serif"
@@ -613,7 +613,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
             style={{
               width: '100%',
               padding: '10px',
-              borderRadius: '8px',
+              borderRadius: '5px',
               border: '1px solid #ddd',
               fontSize: '14px',
               fontFamily: "'Poppins', sans-serif",
@@ -634,7 +634,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
               color: '#666',
               border: '1px solid #e0e0e0',
               padding: '0 24px',
-              borderRadius: '8px',
+              borderRadius: '5px',
               cursor: loading ? 'default' : 'pointer',
               fontSize: '14px',
               fontWeight: 500,
@@ -658,7 +658,7 @@ export default function ClienteFormComponent({ onClose, onSave, initialData, isC
               color: '#4F46E5',
               border: '1px solid #e0e0e0',
               padding: '0 24px',
-              borderRadius: '8px',
+              borderRadius: '5px',
               cursor: loading ? 'default' : 'pointer',
               fontSize: '14px',
               fontWeight: 500,

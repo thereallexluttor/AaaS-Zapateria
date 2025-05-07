@@ -10,6 +10,8 @@ export type ClienteItemType = Cliente & {
 interface ClienteItemProps {
   cliente: ClienteItemType;
   onViewDetails: (cliente: ClienteItemType) => void;
+  isSelected?: boolean;
+  onSelect?: (cliente: ClienteItemType, selected: boolean) => void;
 }
 
 function getClienteImage(cliente: ClienteItemType) {
@@ -77,7 +79,7 @@ function formatPrice(price: string | undefined): string {
   return `€${parseFloat(price).toFixed(2)}`;
 }
 
-export default function ClienteItem({ cliente, onViewDetails }: ClienteItemProps) {
+export default function ClienteItem({ cliente, onViewDetails, isSelected = false, onSelect }: ClienteItemProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [detailsVisible, setDetailsVisible] = useState(false);
   
@@ -109,6 +111,13 @@ export default function ClienteItem({ cliente, onViewDetails }: ClienteItemProps
     setDetailsVisible(!detailsVisible);
     onViewDetails(cliente);
   };
+
+  const handleCheckboxClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Evitar que se propague al elemento padre
+    if (onSelect) {
+      onSelect(cliente, !isSelected);
+    }
+  };
   
   return (
     <div 
@@ -133,6 +142,30 @@ export default function ClienteItem({ cliente, onViewDetails }: ClienteItemProps
       }}
       onClick={handleViewDetails}
     >
+      {/* Checkbox para seleccionar */}
+      {onSelect && (
+        <div 
+          style={{ 
+            padding: '16px 0 16px 16px',
+            display: 'flex',
+            alignItems: 'center'
+          }}
+          onClick={handleCheckboxClick}
+        >
+          <input 
+            type="checkbox" 
+            checked={isSelected}
+            onChange={() => {}} // Para evitar warnings de React sobre input controlado
+            style={{
+              width: '18px',
+              height: '18px',
+              cursor: 'pointer',
+              accentColor: '#4F46E5'
+            }}
+          />
+        </div>
+      )}
+      
       {/* Imagen o Avatar */}
       <div style={{ 
         width: '60px', 
@@ -216,49 +249,18 @@ export default function ClienteItem({ cliente, onViewDetails }: ClienteItemProps
         </div>
       </div>
       
-      {/* Información adicional */}
+      {/* Información adicional - Eliminada la fecha de registro y botón */}
       <div style={{ 
-        display: 'flex', 
+        display: 'flex',
         alignItems: 'center',
         justifyContent: 'flex-end',
-        gap: '16px',
         padding: '16px',
         flexShrink: 0,
         color: '#4B5563'
       }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <ClockIcon style={{ width: '20px', height: '20px', marginBottom: '4px' }} />
-          <div style={{ fontSize: '14px', fontWeight: 500 }}>{fechaRegistroFormateada}</div>
-        </div>
+        {/* Eliminado el div que contenía ClockIcon y fechaRegistroFormateada */}
         
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <button
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '36px',
-              height: '36px',
-              borderRadius: '50%',
-              backgroundColor: '#F3F4F6',
-              border: 'none',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleViewDetails();
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#E5E7EB';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#F3F4F6';
-            }}
-          >
-            <EyeIcon style={{ width: '20px', height: '20px', color: '#6B7280' }} />
-          </button>
-        </div>
+        {/* Eliminado el botón con EyeIcon */}
       </div>
     </div>
   );
