@@ -1,9 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ArrowLeftIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { useInventario } from '../lib/hooks';
 import { uploadImageToSupabase, generateQRCode } from '../lib/hooks';
 import QRCodeModal from './QRCodeModal';
 import React from 'react';
+import { InventoryItemType } from './InventoryItem';
+import { Material } from '../lib/supabase';
 
 // Estilo global para aplicar Helvetica Neue a todo el componente
 const globalStyles = {
@@ -57,9 +59,11 @@ export interface MaterialForm {
 interface MaterialFormProps {
   onClose: () => void;
   isClosing: boolean;
+  isEditMode?: boolean;
+  materialToEdit?: InventoryItemType | null;
 }
 
-function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
+function MaterialFormComponent({ onClose, isClosing, isEditMode = false, materialToEdit = null }: MaterialFormProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const formImageInputRef = useRef<HTMLInputElement>(null);
@@ -85,7 +89,7 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
   const [isExtractedTextClosing, setIsExtractedTextClosing] = useState(false);
   
   // Usamos el hook personalizado para inventario
-  const { addInventarioItem } = useInventario();
+  const { addInventarioItem, updateInventarioItem } = useInventario();
   
   // Estado para el formulario de materiales con campos adicionales
   const [materialForm, setMaterialForm] = useState<MaterialForm>({
@@ -140,6 +144,38 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
     'bobinas'
   ];
 
+  // Cargar datos del material a editar cuando esté en modo edición
+  useEffect(() => {
+    if (isEditMode && materialToEdit && materialToEdit.type === 'material') {
+      const material = materialToEdit as Material & { type: 'material' };
+      
+      setMaterialForm({
+        nombre: material.nombre || '',
+        referencia: material.referencia || '',
+        unidades: material.unidades || '',
+        stock: material.stock || '',
+        stockMinimo: material.stock_minimo || '',
+        precio: material.precio || '',
+        categoria: material.categoria || '',
+        proveedor: material.proveedor || '',
+        descripcion: material.descripcion || '',
+        fechaAdquisicion: material.fecha_adquisicion || '',
+        ubicacion: material.ubicacion || '',
+        imagenUrl: material.imagen_url
+      });
+      
+      // Establecer la vista previa de la imagen si existe
+      if (material.imagen_url) {
+        setImagePreview(material.imagen_url);
+      }
+      
+      // Guardar el ID para la actualización
+      if (material.id) {
+        setSavedItemId(material.id);
+      }
+    }
+  }, [isEditMode, materialToEdit]);
+
   const handleMaterialChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setMaterialForm(prev => ({
@@ -182,17 +218,33 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
       setServerError(null); // Limpiar errores previos
       
       try {
-        // Guardar temporalmente el archivo para procesarlo con Python OCR
-        const tempPath = await saveTemporaryFile(file);
+        // Procesar la imagen directamente con OCR
+        console.log('Enviando imagen para procesamiento OCR');
         
-        if (!tempPath) {
-          throw new Error('No se pudo guardar la imagen temporalmente');
-        }
+        // Leer el archivo como ArrayBuffer para enviarlo al proceso principal
+        const reader = new FileReader();
+        const processImagePromise = new Promise<any>((resolve, reject) => {
+          reader.onload = async (event) => {
+            try {
+              // Generar un nombre único para el archivo temporal
+              const tempFileName = `temp_${Date.now()}_${file.name}`;
+              
+              // Solicitar al proceso principal que guarde el archivo y lo procese
+              const result = await window.ipcRenderer.invoke('process-material-ocr', {
+                fileName: tempFileName,
+                data: event.target?.result
+              });
+              
+              resolve(result);
+            } catch (error) {
+              reject(error);
+            }
+          };
+          reader.onerror = (error) => reject(error);
+          reader.readAsArrayBuffer(file);
+        });
         
-        console.log('Enviando imagen para procesamiento OCR:', tempPath);
-        
-        // Llamar al procesamiento OCR usando IPC
-        const result = await window.ipcRenderer.invoke('process-material-ocr', tempPath);
+        const result = await processImagePromise;
         
         console.log('Resultado del OCR de imagen:', result);
         
@@ -295,17 +347,33 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
       setServerError(null); // Limpiar errores previos
       
       try {
-        // Guardar temporalmente el archivo PDF para procesarlo con Python
-        const tempPath = await saveTemporaryFile(file);
+        // Procesar el PDF directamente
+        console.log('Enviando PDF para procesamiento OCR');
         
-        if (!tempPath) {
-          throw new Error('No se pudo guardar el archivo temporalmente');
-        }
+        // Leer el archivo como ArrayBuffer para enviarlo al proceso principal
+        const reader = new FileReader();
+        const processPdfPromise = new Promise<any>((resolve, reject) => {
+          reader.onload = async (event) => {
+            try {
+              // Generar un nombre único para el archivo temporal
+              const tempFileName = `temp_${Date.now()}_${file.name}`;
+              
+              // Solicitar al proceso principal que guarde el archivo y lo procese
+              const result = await window.ipcRenderer.invoke('process-material-ocr', {
+                fileName: tempFileName,
+                data: event.target?.result
+              });
+              
+              resolve(result);
+            } catch (error) {
+              reject(error);
+            }
+          };
+          reader.onerror = (error) => reject(error);
+          reader.readAsArrayBuffer(file);
+        });
         
-        console.log('Enviando PDF para procesamiento OCR:', tempPath);
-        
-        // Llamar al procesamiento OCR usando IPC
-        const result = await window.ipcRenderer.invoke('process-material-ocr', tempPath);
+        const result = await processPdfPromise;
         
         console.log('Resultado del OCR:', result);
         
@@ -424,13 +492,39 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
         const imageUrl = await uploadImageToSupabase(file);
         
         if (imageUrl) {
+          // Actualizar el estado del formulario con la nueva URL de imagen
           setMaterialForm(prev => ({
             ...prev,
             imagenUrl: imageUrl
           }));
+          
+          console.log('Imagen subida con éxito:', imageUrl);
+          // Mostrar mensaje sutil para indicar que aún debe hacer clic en Actualizar
+          if (isEditMode) {
+            const messageElement = document.createElement('div');
+            messageElement.textContent = 'Imagen subida. Haz clic en "Actualizar material" para guardar los cambios.';
+            messageElement.style.position = 'fixed';
+            messageElement.style.bottom = '20px';
+            messageElement.style.left = '50%';
+            messageElement.style.transform = 'translateX(-50%)';
+            messageElement.style.backgroundColor = '#4F46E5';
+            messageElement.style.color = 'white';
+            messageElement.style.padding = '10px 20px';
+            messageElement.style.borderRadius = '5px';
+            messageElement.style.zIndex = '10000';
+            messageElement.style.fontSize = '14px';
+            
+            document.body.appendChild(messageElement);
+            
+            // Remover después de 3 segundos
+            setTimeout(() => {
+              document.body.removeChild(messageElement);
+            }, 3000);
+          }
         } else {
           // Si falla, aún podemos usar la URL local para la vista previa
           console.error('No se pudo subir la imagen a Supabase');
+          setServerError('No se pudo subir la imagen. Por favor, inténtalo de nuevo.');
         }
       } catch (error) {
         console.error('Error al subir la imagen:', error);
@@ -441,37 +535,6 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
         if (e.target) e.target.value = '';
       }
     }
-  };
-
-  // Función para guardar temporalmente un archivo y obtener su ruta
-  const saveTemporaryFile = async (file: File): Promise<string | null> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        try {
-          // Generar un nombre único para el archivo temporal
-          const tempFileName = `temp_${Date.now()}_${file.name}`;
-          
-          // Solicitar al proceso principal que guarde el archivo
-          const tempPath = await window.ipcRenderer.invoke(
-            'save-temp-file', 
-            {
-              fileName: tempFileName,
-              data: event.target?.result
-            }
-          );
-          
-          resolve(tempPath);
-        } catch (error) {
-          console.error('Error al guardar archivo temporal:', error);
-          reject(error);
-        }
-      };
-      reader.onerror = () => {
-        reject(new Error('No se pudo leer el archivo'));
-      };
-      reader.readAsArrayBuffer(file);
-    });
   };
 
   const handleRawTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -578,6 +641,15 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
   };
 
   const validateForm = (): boolean => {
+    // Si estamos en modo edición y solo ha cambiado la imagen, no validamos los campos
+    if (isEditMode && materialToEdit && materialToEdit.type === 'material') {
+      const originalImageUrl = materialToEdit.imagen_url || null;
+      if (originalImageUrl !== materialForm.imagenUrl && savedItemId) {
+        // Solo cambió la imagen, permitir la actualización sin validar otros campos
+        return true;
+      }
+    }
+
     const errors: Partial<Record<keyof MaterialForm, string>> = {};
     
     // Validar campos requeridos
@@ -601,7 +673,13 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
   const handleSubmitMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) {
+    // Comprobar primero si estamos en modo edición y solo ha cambiado la foto
+    const isImageOnlyUpdate = isEditMode && savedItemId && materialToEdit && 
+      materialToEdit.type === 'material' && 
+      materialToEdit.imagen_url !== materialForm.imagenUrl;
+    
+    // Solo validamos el formulario si no es una actualización exclusiva de imagen
+    if (!isImageOnlyUpdate && !validateForm()) {
       return;
     }
     
@@ -609,6 +687,45 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
     setServerError(null);
     
     try {
+      // Si solo estamos actualizando la imagen
+      if (isImageOnlyUpdate) {
+        console.log("Solo se ha cambiado la foto, actualizando solo la imagen:", materialForm.imagenUrl);
+        
+        // Actualizar solo la imagen
+        const result = await updateInventarioItem('material', savedItemId, {
+          imagen_url: materialForm.imagenUrl
+        });
+        
+        if (result) {
+          console.log('Imagen actualizada con éxito:', result);
+          
+          // Mostrar notificación de éxito
+          const successMessage = document.createElement('div');
+          successMessage.textContent = 'Imagen actualizada con éxito';
+          successMessage.style.position = 'fixed';
+          successMessage.style.bottom = '20px';
+          successMessage.style.left = '50%';
+          successMessage.style.transform = 'translateX(-50%)';
+          successMessage.style.backgroundColor = '#10B981';
+          successMessage.style.color = 'white';
+          successMessage.style.padding = '10px 20px';
+          successMessage.style.borderRadius = '5px';
+          successMessage.style.zIndex = '10000';
+          
+          document.body.appendChild(successMessage);
+          
+          // Remover la notificación después de 2 segundos
+          setTimeout(() => {
+            document.body.removeChild(successMessage);
+          }, 2000);
+          
+          // Cerrar formulario inmediatamente
+          onClose();
+          return;
+        }
+      }
+      
+      // Si llegamos aquí, actualizamos todos los campos normalmente
       // Transformar los campos a formato snake_case para la base de datos
       const materialData = {
         nombre: materialForm.nombre,
@@ -625,34 +742,75 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
         imagen_url: materialForm.imagenUrl
       };
       
-      // Usar el hook de inventario para agregar el material
-      // El código QR se genera y guarda automáticamente dentro del hook
-      const result = await addInventarioItem('material', materialData);
+      // Log para verificar que la imagen se está enviando
+      console.log("Datos a enviar:", materialData);
+      console.log("URL de imagen a guardar:", materialData.imagen_url);
       
-      if (result && result.id) {
-        console.log('Material guardado con éxito:', result);
-        
-        // El QR ya fue generado y guardado en el hook, solo necesitamos obtenerlo para mostrar
-        // Si el resultado tiene la URL del QR, usamos esa
-        if (result.qr_code) {
-          setQrCodeUrl(result.qr_code);
+      let result;
+      
+      if (isEditMode && savedItemId) {
+        // Actualizar material existente
+        console.log("Actualizando material con ID:", savedItemId);
+        result = await updateInventarioItem('material', savedItemId, materialData);
+        if (result) {
+          console.log('Material actualizado con éxito:', result);
+          
+          // Mostrar una notificación de éxito
+          const successMessage = document.createElement('div');
+          successMessage.textContent = 'Material actualizado con éxito';
+          successMessage.style.position = 'fixed';
+          successMessage.style.bottom = '20px';
+          successMessage.style.left = '50%';
+          successMessage.style.transform = 'translateX(-50%)';
+          successMessage.style.backgroundColor = '#10B981';
+          successMessage.style.color = 'white';
+          successMessage.style.padding = '10px 20px';
+          successMessage.style.borderRadius = '5px';
+          successMessage.style.zIndex = '10000';
+          
+          document.body.appendChild(successMessage);
+          
+          // Remover la notificación después de 3 segundos
+          setTimeout(() => {
+            document.body.removeChild(successMessage);
+          }, 3000);
+          
+          // Cerrar formulario después de actualizar
+          setTimeout(() => {
+            onClose();
+          }, 1000);
         } else {
-          // Si por alguna razón no tiene el QR, generamos uno solo para mostrar
-          // pero no lo guardamos de nuevo
-          const qrCode = await generateQRCode('material', result.id);
-          setQrCodeUrl(qrCode);
+          setServerError('No se pudo actualizar el material. Intente nuevamente.');
         }
-        
-        setSavedItemId(result.id);
-        
-        // Mostrar modal con el código QR
-        setShowQrModal(true);
       } else {
-        setServerError('No se pudo guardar el material. Intente nuevamente.');
+        // Crear nuevo material
+        result = await addInventarioItem('material', materialData);
+        
+        if (result && result.id) {
+          console.log('Material guardado con éxito:', result);
+          
+          // El QR ya fue generado y guardado en el hook, solo necesitamos obtenerlo para mostrar
+          // Si el resultado tiene la URL del QR, usamos esa
+          if (result.qr_code) {
+            setQrCodeUrl(result.qr_code);
+          } else {
+            // Si por alguna razón no tiene el QR, generamos uno solo para mostrar
+            // pero no lo guardamos de nuevo
+            const qrCode = await generateQRCode('material', result.id);
+            setQrCodeUrl(qrCode);
+          }
+          
+          setSavedItemId(result.id);
+          
+          // Mostrar modal con el código QR solo para nuevos materiales
+          setShowQrModal(true);
+        } else {
+          setServerError('No se pudo guardar el material. Intente nuevamente.');
+        }
       }
     } catch (error) {
       console.error('Error al guardar el material:', error);
-      setServerError('Ocurrió un error al guardar. Intente nuevamente.');
+      setServerError(`Ocurrió un error al ${isEditMode ? 'actualizar' : 'guardar'}. Intente nuevamente.`);
     } finally {
       setIsSaving(false);
     }
@@ -714,7 +872,9 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
           id="material-form-title"
           style={{ fontSize: '20px', fontWeight: 400, margin: 0, fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
         >
-          Agregar material
+          {isEditMode 
+            ? `Editar material: ${materialForm.nombre}` 
+            : 'Agregar material'}
         </h2>
       </header>
       
@@ -749,15 +909,35 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                position: 'relative'
               }}
             >
               {imagePreview ? (
-                <img 
-                  src={imagePreview} 
-                  alt="Vista previa del material" 
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                />
+                <>
+                  <img 
+                    src={imagePreview} 
+                    alt={`Vista previa de ${materialForm.nombre}`} 
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                  />
+                  {isEditMode && (
+                    <div 
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        color: 'white',
+                        fontSize: '10px',
+                        padding: '4px',
+                        textAlign: 'center'
+                      }}
+                    >
+                      Puedes cambiar esta imagen
+                    </div>
+                  )}
+                </>
               ) : (
                 <PhotoIcon style={{ width: '40px', height: '40px', color: '#aaa' }} aria-hidden="true" />
               )}
@@ -777,13 +957,16 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
                   id="nombre-material"
                   value={materialForm.nombre}
                   onChange={handleMaterialChange}
+                  readOnly={isEditMode}
                   style={{
                     width: '100%',
                     padding: '10px',
                     borderRadius: '5px',
                     border: formErrors.nombre ? '1px solid red' : '1px solid #ddd',
                     fontSize: '14px',
-                    fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif"
+                    fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+                    backgroundColor: isEditMode ? '#f0f0f0' : 'white',
+                    cursor: isEditMode ? 'not-allowed' : 'text'
                   }}
                   placeholder="Ej: Cuero vacuno curtido vegetal"
                   aria-required="true"
@@ -842,7 +1025,7 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
                       Subiendo...
                     </>
                   ) : (
-                    'Agregar foto'
+                    imagePreview ? 'Cambiar foto' : 'Agregar foto'
                   )}
                 </button>
                 <p style={{ 
@@ -1208,7 +1391,7 @@ function MaterialFormComponent({ onClose, isClosing }: MaterialFormProps) {
             onMouseLeave={(e) => !isSaving && (e.currentTarget.style.transform = 'translateY(0)')}
             aria-busy={isSaving}
           >
-            {isSaving ? 'Guardando...' : 'Añadir material'}
+            {isSaving ? 'Guardando...' : isEditMode ? 'Actualizar material' : 'Añadir material'}
           </button>
         </div>
       </form>
