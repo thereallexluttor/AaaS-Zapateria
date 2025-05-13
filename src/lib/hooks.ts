@@ -1015,6 +1015,81 @@ export function useInventario() {
     }
   }, [getItemById]);
 
+  // Actualizar un elemento existente en el inventario
+  const updateInventarioItem = async (
+    type: 'material' | 'producto' | 'herramienta', 
+    id: string, 
+    data: any
+  ): Promise<any> => {
+    try {
+      setLoading(true);
+      let result;
+
+      // Actualizar el elemento según su tipo
+      if (type === 'material') {
+        const { error, data: updatedMaterial } = await supabase
+          .from('materiales')
+          .update(data)
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        result = updatedMaterial;
+        
+        // Actualizar el estado local del material
+        setMaterials(prevState => 
+          prevState.map(item => 
+            item.id === id ? { ...item, ...data } : item
+          )
+        );
+      } 
+      else if (type === 'producto') {
+        const { error, data: updatedProducto } = await supabase
+          .from('productos')
+          .update(data)
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        result = updatedProducto;
+        
+        // Actualizar el estado local del producto
+        setProductos(prevState => 
+          prevState.map(item => 
+            item.id === id ? { ...item, ...data } : item
+          )
+        );
+      } 
+      else if (type === 'herramienta') {
+        const { error, data: updatedHerramienta } = await supabase
+          .from('herramientas')
+          .update(data)
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        result = updatedHerramienta;
+        
+        // Actualizar el estado local de la herramienta
+        setHerramientas(prevState => 
+          prevState.map(item => 
+            item.id === id ? { ...item, ...data } : item
+          )
+        );
+      }
+
+      return result;
+    } catch (error: any) {
+      console.error(`Error al actualizar ${type}:`, error);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     loading: loading || loadingMateriales || loadingHerramientas || loadingProductos,
     materials,
@@ -1027,7 +1102,8 @@ export function useInventario() {
     addInventarioItem,
     refreshAllData,
     generateAndSaveQR,
-    getItemById
+    getItemById,
+    updateInventarioItem
   };
 }
 

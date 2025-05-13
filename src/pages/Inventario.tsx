@@ -3,12 +3,15 @@ import { PlusCircleIcon, ArrowDownTrayIcon, PrinterIcon, MagnifyingGlassIcon } f
 import MaterialFormComponent from '../components/MaterialForm';
 import ProductoFormComponent from '../components/ProductoForm';
 import HerramientaFormComponent from '../components/HerramientaForm';
+import OrdenMaterialForm from '../components/OrdenMaterialForm';
+import MaterialOrdenList from '../components/MaterialOrdenList';
 import InventoryItem, { InventoryItemType } from '../components/InventoryItem';
 import { useInventario } from '../lib/hooks';
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
 
-type ModalType = 'material' | 'producto' | 'herramienta' | null;
+type ModalType = 'material' | 'producto' | 'herramienta' | 'ordenMaterial' | null;
 type FilterTab = 'materiales' | 'productos' | 'herramientas';
+type ViewMode = 'list' | 'materialOrdenes';
 
 function Inventario() {
   const [activeModal, setActiveModal] = useState<ModalType>(null);
@@ -18,6 +21,8 @@ function Inventario() {
   const [activeTab, setActiveTab] = useState<FilterTab>('materiales');
   const [prevTab, setPrevTab] = useState<FilterTab>('materiales');
   const [transitionDirection, setTransitionDirection] = useState<'left' | 'right'>('right');
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   
   // Referencia para guardar el último término de búsqueda que se envió a la API
   const lastSearchTermRef = useRef<string>('');
@@ -78,6 +83,8 @@ function Inventario() {
   }, [searchInventario]);
   
   const openModal = (type: ModalType) => {
+    setIsEditMode(false);
+    setSelectedItem(null);
     setActiveModal(type);
   };
   
@@ -86,6 +93,8 @@ function Inventario() {
     setTimeout(() => {
       setActiveModal(null);
       setIsClosing(false);
+      setIsEditMode(false);
+      setSelectedItem(null);
       
       // Actualizar el inventario después de cerrar el modal
       refreshAllData();
@@ -93,9 +102,47 @@ function Inventario() {
   }, [refreshAllData]);
   
   const handleViewDetails = useCallback((item: InventoryItemType) => {
-    setSelectedItem(item);
-    // Aquí puedes implementar la lógica para mostrar los detalles del elemento
-    console.log('Ver detalles de:', item);
+    if (item.type === 'material') {
+      // Ya no cambiamos a la vista de órdenes al hacer clic en la tarjeta
+      setSelectedItem(item);
+      console.log('Ver detalles de material:', item);
+    } else {
+      // Para otros tipos de items, mantener el comportamiento actual
+      setSelectedItem(item);
+      console.log('Ver detalles de:', item);
+    }
+  }, []);
+  
+  // Nueva función específica para ver órdenes de materiales
+  const handleViewMaterialOrders = useCallback((item: InventoryItemType) => {
+    if (item.type === 'material') {
+      setSelectedItem(item);
+      setViewMode('materialOrdenes');
+      console.log('Ver órdenes de material:', item);
+    }
+  }, []);
+  
+  // Función específica para editar materiales
+  const handleEditMaterial = useCallback((item: InventoryItemType) => {
+    if (item.type === 'material') {
+      setSelectedItem(item);
+      setIsEditMode(true);
+      setActiveModal('material');
+    }
+  }, []);
+
+  // Nueva función para ordenar materiales
+  const handleOrderMaterial = useCallback((item: InventoryItemType) => {
+    if (item.type === 'material') {
+      setSelectedItem(item);
+      setActiveModal('ordenMaterial');
+    }
+  }, []);
+
+  // Volver a la vista de lista desde la vista de órdenes
+  const handleBackToList = useCallback(() => {
+    setViewMode('list');
+    setSelectedItem(null);
   }, []);
 
   // Filtrar elementos según la pestaña activa
@@ -117,6 +164,12 @@ function Inventario() {
   // Manejar cambio de pestaña con animación
   const handleTabChange = useCallback((tab: FilterTab) => {
     if (tab === activeTab) return;
+    
+    // Si estamos en la vista de órdenes, volver a la lista primero
+    if (viewMode === 'materialOrdenes') {
+      setViewMode('list');
+      setSelectedItem(null);
+    }
     
     // Establecer la dirección de la transición basada en la posición de la pestaña
     const tabOrder = ['materiales', 'productos', 'herramientas'];
@@ -143,13 +196,203 @@ function Inventario() {
       }, 50);
     }, 300);
     
-  }, [activeTab]);
+  }, [activeTab, viewMode]);
 
   // Clase CSS para la animación de los elementos según la dirección
   const getTransitionClass = () => {
     return itemsVisible 
       ? transitionDirection === 'right' ? 'items-enter-active-right' : 'items-enter-active-left'
       : transitionDirection === 'right' ? 'items-exit-active-right' : 'items-exit-active-left';
+  };
+
+  // Renderizar el contenido según el modo de vista
+  const renderContent = () => {
+    if (viewMode === 'materialOrdenes' && selectedItem && selectedItem.type === 'material') {
+      return (
+        <MaterialOrdenList 
+          materialId={selectedItem.id || '0'} 
+          materialNombre={selectedItem.nombre}
+          onBack={handleBackToList}
+        />
+      );
+    }
+
+    return (
+      <>
+        {/* Barra de búsqueda */}
+        <div style={{ position: 'relative', marginBottom: '24px' }}>
+          <div style={{ 
+            position: 'absolute', 
+            left: '12px', 
+            top: '50%', 
+            transform: 'translateY(-50%)',
+            color: '#9CA3AF',
+            display: 'flex',
+            alignItems: 'center' 
+          }}>
+            <MagnifyingGlassIcon style={{ width: '20px', height: '20px' }} />
+          </div>
+          <input
+            type="text"
+            placeholder="Buscar en inventario..."
+            value={searchTerm}
+            onChange={handleSearchChange}
+            style={{
+              width: '100%',
+              height: '44px',
+              border: '1px solid #E5E7EB',
+              borderRadius: '6px',
+              paddingLeft: '40px',
+              paddingRight: '16px',
+              fontSize: '14px',
+              fontFamily: "'Poppins', sans-serif",
+              outline: 'none',
+              boxShadow: 'none',
+              transition: 'all 0.3s ease'
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#4F46E5'}
+            onBlur={(e) => e.target.style.borderColor = '#E5E7EB'}
+          />
+        </div>
+        
+        {/* Pestañas de filtro */}
+        <div style={{
+          display: 'flex',
+          borderBottom: '1px solid #E5E7EB',
+          marginBottom: '20px',
+          paddingBottom: '2px'
+        }}>
+          {(['materiales', 'productos', 'herramientas'] as FilterTab[]).map((tab) => (
+            <button 
+              key={tab}
+              onClick={() => handleTabChange(tab)}
+              style={{
+                padding: '10px 16px',
+                fontSize: '14px',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: activeTab === tab ? 600 : 400,
+                color: activeTab === tab ? '#4F46E5' : '#6B7280',
+                borderBottom: activeTab === tab ? '2px solid #4F46E5' : 'none',
+                marginBottom: activeTab === tab ? '-2px' : '0',
+                transition: 'all 0.2s',
+                fontFamily: "'Poppins', sans-serif",
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+            >
+              {/* Animación de subrayado */}
+              <span className={activeTab === tab ? 'tab-underline-active' : 'tab-underline'} />
+              
+              {tab === 'materiales' && '🧵 Materiales'}
+              {tab === 'productos' && '👞 Productos'}
+              {tab === 'herramientas' && '🔧 Herramientas'}
+            </button>
+          ))}
+        </div>
+        
+        {/* Título del inventario con contador */}
+        <h2 style={{ 
+          fontSize: '18px', 
+          fontWeight: 600, 
+          color: '#111827', 
+          marginBottom: '16px',
+          marginTop: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <span>
+            {activeTab === 'materiales' && 'Lista Materiales'}
+            {activeTab === 'productos' && 'Lista Productos'}
+            {activeTab === 'herramientas' && 'Lista Herramientas'}
+            {initialized && !loading && inventoryItems.length > 0 && 
+              <span style={{ 
+                fontSize: '14px', 
+                color: '#6B7280', 
+                fontWeight: 400, 
+                marginLeft: '8px' 
+              }}>
+                ({inventoryItems.length} {inventoryItems.length === 1 ? 'elemento' : 'elementos'})
+              </span>
+            }
+          </span>
+          
+          {searchTerm && initialized && !loading && (
+            <span style={{ 
+              fontSize: '14px', 
+              color: '#6B7280', 
+              fontWeight: 400 
+            }}>
+              {`Resultados para "${searchTerm}"`}
+            </span>
+          )}
+        </h2>
+        
+        {/* Mostrar mensaje de carga o inicialización */}
+        {(loading || !initialized) && (
+          <div style={{ 
+            textAlign: 'center', 
+            padding: '40px 0', 
+            color: '#6B7280',
+            fontSize: '14px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '12px'
+          }}>
+            <div className="spinner"></div>
+            Cargando inventario...
+          </div>
+        )}
+        
+        {/* Lista de elementos con transición */}
+        <div 
+          style={{ 
+            maxHeight: 'calc(100vh - 220px)', 
+            overflowY: 'auto', 
+            position: 'relative' 
+          }} 
+          className="apple-scrollbar"
+        >
+          <div className={`inventory-items-container ${getTransitionClass()}`}>
+            {initialized && !loading && inventoryItems.map((item) => (
+              <div key={`${item.type}-${item.id}`} className="inventory-item-wrapper">
+                <InventoryItem 
+                  item={item} 
+                  onViewDetails={handleViewDetails}
+                  onEdit={item.type === 'material' ? handleEditMaterial : undefined}
+                  onOrder={item.type === 'material' ? handleOrderMaterial : undefined}
+                  onViewOrders={item.type === 'material' ? handleViewMaterialOrders : undefined}
+                />
+              </div>
+            ))}
+            
+            {/* Mensaje cuando no hay elementos */}
+            {initialized && !loading && inventoryItems.length === 0 && (
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '40px 0', 
+                color: '#6B7280',
+                fontSize: '14px'
+              }}>
+                {searchTerm 
+                  ? `No se encontraron elementos para "${searchTerm}"` 
+                  : `No hay ${
+                      activeTab === 'materiales' ? 'materiales' : 
+                      activeTab === 'productos' ? 'productos' : 'herramientas'
+                    } en el inventario.`
+                }
+              </div>
+            )}
+            
+            {/* Espacio adicional para permitir scroll más abajo */}
+            <div style={{ padding: '100px 0' }}></div>
+          </div>
+        </div>
+      </>
+    );
   };
 
   return (
@@ -161,177 +404,9 @@ function Inventario() {
       fontFamily: "'Poppins', sans-serif",
       overflow: 'hidden' 
     }}>
-      {/* Barra de búsqueda */}
-      <div style={{ position: 'relative', marginBottom: '24px' }}>
-        <div style={{ 
-          position: 'absolute', 
-          left: '12px', 
-          top: '50%', 
-          transform: 'translateY(-50%)',
-          color: '#9CA3AF',
-          display: 'flex',
-          alignItems: 'center' 
-        }}>
-          <MagnifyingGlassIcon style={{ width: '20px', height: '20px' }} />
-        </div>
-        <input
-          type="text"
-          placeholder="Buscar en inventario..."
-          value={searchTerm}
-          onChange={handleSearchChange}
-          style={{
-            width: '100%',
-            height: '44px',
-            border: '1px solid #E5E7EB',
-            borderRadius: '6px',
-            paddingLeft: '40px',
-            paddingRight: '16px',
-            fontSize: '14px',
-            fontFamily: "'Poppins', sans-serif",
-            outline: 'none',
-            boxShadow: 'none',
-            transition: 'all 0.3s ease'
-          }}
-          onFocus={(e) => e.target.style.borderColor = '#4F46E5'}
-          onBlur={(e) => e.target.style.borderColor = '#E5E7EB'}
-        />
-      </div>
+      {renderContent()}
       
-      {/* Pestañas de filtro */}
-      <div style={{
-        display: 'flex',
-        borderBottom: '1px solid #E5E7EB',
-        marginBottom: '20px',
-        paddingBottom: '2px'
-      }}>
-        {(['materiales', 'productos', 'herramientas'] as FilterTab[]).map((tab) => (
-          <button 
-            key={tab}
-            onClick={() => handleTabChange(tab)}
-            style={{
-              padding: '10px 16px',
-              fontSize: '14px',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              fontWeight: activeTab === tab ? 600 : 400,
-              color: activeTab === tab ? '#4F46E5' : '#6B7280',
-              borderBottom: activeTab === tab ? '2px solid #4F46E5' : 'none',
-              marginBottom: activeTab === tab ? '-2px' : '0',
-              transition: 'all 0.2s',
-              fontFamily: "'Poppins', sans-serif",
-              position: 'relative',
-              overflow: 'hidden'
-            }}
-          >
-            {/* Animación de subrayado */}
-            <span className={activeTab === tab ? 'tab-underline-active' : 'tab-underline'} />
-            
-            {tab === 'materiales' && '🧵 Materiales'}
-            {tab === 'productos' && '👞 Productos'}
-            {tab === 'herramientas' && '🔧 Herramientas'}
-          </button>
-        ))}
-      </div>
-      
-      {/* Título del inventario con contador */}
-      <h2 style={{ 
-        fontSize: '18px', 
-        fontWeight: 600, 
-        color: '#111827', 
-        marginBottom: '16px',
-        marginTop: '24px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between'
-      }}>
-        <span>
-          {activeTab === 'materiales' && 'Lista Materiales'}
-          {activeTab === 'productos' && 'Lista Productos'}
-          {activeTab === 'herramientas' && 'Lista Herramientas'}
-          {initialized && !loading && inventoryItems.length > 0 && 
-            <span style={{ 
-              fontSize: '14px', 
-              color: '#6B7280', 
-              fontWeight: 400, 
-              marginLeft: '8px' 
-            }}>
-              ({inventoryItems.length} {inventoryItems.length === 1 ? 'elemento' : 'elementos'})
-            </span>
-          }
-        </span>
-        
-        {searchTerm && initialized && !loading && (
-          <span style={{ 
-            fontSize: '14px', 
-            color: '#6B7280', 
-            fontWeight: 400 
-          }}>
-            {`Resultados para "${searchTerm}"`}
-          </span>
-        )}
-      </h2>
-      
-      {/* Mostrar mensaje de carga o inicialización */}
-      {(loading || !initialized) && (
-        <div style={{ 
-          textAlign: 'center', 
-          padding: '40px 0', 
-          color: '#6B7280',
-          fontSize: '14px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '12px'
-        }}>
-          <div className="spinner"></div>
-          Cargando inventario...
-        </div>
-      )}
-      
-      {/* Lista de elementos con transición */}
-      <div 
-        style={{ 
-          maxHeight: 'calc(100vh - 220px)', 
-          overflowY: 'auto', 
-          position: 'relative' 
-        }} 
-        className="apple-scrollbar"
-      >
-        <div className={`inventory-items-container ${getTransitionClass()}`}>
-          {initialized && !loading && inventoryItems.map((item) => (
-            <div key={`${item.type}-${item.id}`} className="inventory-item-wrapper">
-              <InventoryItem 
-                item={item} 
-                onViewDetails={handleViewDetails} 
-              />
-            </div>
-          ))}
-          
-          {/* Mensaje cuando no hay elementos */}
-          {initialized && !loading && inventoryItems.length === 0 && (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: '40px 0', 
-              color: '#6B7280',
-              fontSize: '14px'
-            }}>
-              {searchTerm 
-                ? `No se encontraron elementos para "${searchTerm}"` 
-                : `No hay ${
-                    activeTab === 'materiales' ? 'materiales' : 
-                    activeTab === 'productos' ? 'productos' : 'herramientas'
-                  } en el inventario.`
-              }
-            </div>
-          )}
-          
-          {/* Espacio adicional para permitir scroll más abajo */}
-          <div style={{ padding: '100px 0' }}></div>
-        </div>
-      </div>
-      
-      {/* Modal para agregar elementos */}
+      {/* Modal para agregar, editar o ordenar elementos */}
       {activeModal && (
         <div 
           style={{
@@ -353,6 +428,8 @@ function Inventario() {
             <MaterialFormComponent 
               onClose={closeModal}
               isClosing={isClosing}
+              isEditMode={isEditMode}
+              materialToEdit={isEditMode ? selectedItem : null}
             />
           )}
           
@@ -369,123 +446,133 @@ function Inventario() {
               isClosing={isClosing}
             />
           )}
+
+          {activeModal === 'ordenMaterial' && (
+            <OrdenMaterialForm 
+              onClose={closeModal}
+              isClosing={isClosing}
+              material={selectedItem}
+            />
+          )}
         </div>
       )}
       
       {/* Contenedor de botones en esquina inferior derecha */}
-      <div 
-        style={{
-          position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          display: 'flex',
-          gap: '12px',
-          zIndex: 9999,
-          backgroundColor: 'rgba(255, 255, 255, 0.8)',
-          padding: '8px',
-          borderRadius: '8px',
-          boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)'
-        }}
-      >
-        {/* Botón Agregar Producto */}
-        <button 
+      {viewMode === 'list' && (
+        <div 
           style={{
-            width: '190px',
-            height: '36px',
-            backgroundColor: 'white',
-            borderRadius: '6px',
-            boxShadow: 'none',
-            border: '1px solid #E5E7EB',
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
             display: 'flex',
-            alignItems: 'center',
-            padding: '0 16px',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            color: '#1a1a1a',
-            fontSize: '14px',
-            fontWeight: 200,
-            fontFamily: "'Poppins', sans-serif",
-          }}
-          onClick={() => openModal('producto')}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.borderColor = '#D1D5DB';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.borderColor = '#E5E7EB';
+            gap: '12px',
+            zIndex: 9999,
+            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+            padding: '8px',
+            borderRadius: '8px',
+            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)'
           }}
         >
-          <PlusCircleIcon style={{ width: '20px', height: '20px', marginRight: '8px' }} />
-          Agregar Producto
-        </button>
+          {/* Botón Agregar Producto */}
+          <button 
+            style={{
+              width: '190px',
+              height: '36px',
+              backgroundColor: 'white',
+              borderRadius: '6px',
+              boxShadow: 'none',
+              border: '1px solid #E5E7EB',
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0 16px',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              color: '#1a1a1a',
+              fontSize: '14px',
+              fontWeight: 200,
+              fontFamily: "'Poppins', sans-serif",
+            }}
+            onClick={() => openModal('producto')}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.borderColor = '#D1D5DB';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.borderColor = '#E5E7EB';
+            }}
+          >
+            <PlusCircleIcon style={{ width: '20px', height: '20px', marginRight: '8px' }} />
+            Agregar Producto
+          </button>
 
-        {/* Botón Agregar Herramientas */}
-        <button 
-          style={{
-            width: '230px',
-            height: '36px',
-            backgroundColor: 'white',
-            borderRadius: '6px',
-            boxShadow: 'none',
-            border: '1px solid #E5E7EB',
-            display: 'flex',
-            alignItems: 'center',
-            padding: '0 16px',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            color: '#1a1a1a',
-            fontSize: '14px',
-            fontWeight: 200,
-            fontFamily: "'Poppins', sans-serif",
-          }}
-          onClick={() => openModal('herramienta')}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.borderColor = '#D1D5DB';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.borderColor = '#E5E7EB';
-          }}
-        >
-          <PlusCircleIcon style={{ width: '20px', height: '20px', marginRight: '8px' }} />
-          Agregar herramientas
-        </button>
+          {/* Botón Agregar Herramientas */}
+          <button 
+            style={{
+              width: '230px',
+              height: '36px',
+              backgroundColor: 'white',
+              borderRadius: '6px',
+              boxShadow: 'none',
+              border: '1px solid #E5E7EB',
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0 16px',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              color: '#1a1a1a',
+              fontSize: '14px',
+              fontWeight: 200,
+              fontFamily: "'Poppins', sans-serif",
+            }}
+            onClick={() => openModal('herramienta')}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.borderColor = '#D1D5DB';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.borderColor = '#E5E7EB';
+            }}
+          >
+            <PlusCircleIcon style={{ width: '20px', height: '20px', marginRight: '8px' }} />
+            Agregar herramientas
+          </button>
 
-        {/* Botón Agregar Materiales */}
-        <button 
-          style={{
-            width: '210px',
-            height: '36px',
-            backgroundColor: 'white',
-            borderRadius: '6px',
-            boxShadow: 'none',
-            border: '1px solid #E5E7EB',
-            display: 'flex',
-            alignItems: 'center',
-            padding: '0 16px',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            color: '#1a1a1a',
-            fontSize: '14px',
-            fontWeight: 200,
-            fontFamily: "'Poppins', sans-serif",
-          }}
-          onClick={() => openModal('material')}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.borderColor = '#D1D5DB';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.borderColor = '#E5E7EB';
-          }}
-        >
-          <PlusCircleIcon style={{ width: '20px', height: '20px', marginRight: '8px' }} />
-          Agregar materiales
-        </button>
-      </div>
+          {/* Botón Agregar Materiales */}
+          <button 
+            style={{
+              width: '210px',
+              height: '36px',
+              backgroundColor: 'white',
+              borderRadius: '6px',
+              boxShadow: 'none',
+              border: '1px solid #E5E7EB',
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0 16px',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              color: '#1a1a1a',
+              fontSize: '14px',
+              fontWeight: 200,
+              fontFamily: "'Poppins', sans-serif",
+            }}
+            onClick={() => openModal('material')}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.borderColor = '#D1D5DB';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.borderColor = '#E5E7EB';
+            }}
+          >
+            <PlusCircleIcon style={{ width: '20px', height: '20px', marginRight: '8px' }} />
+            Agregar materiales
+          </button>
+        </div>
+      )}
     </div>
   );
 }

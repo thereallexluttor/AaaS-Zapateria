@@ -1,5 +1,5 @@
 import { Material, Herramienta, Producto } from '../lib/supabase';
-import { EyeIcon, TagIcon, ClockIcon, CurrencyDollarIcon, ChartBarIcon, SwatchIcon, ScaleIcon, CalendarIcon, CubeIcon, ShoppingBagIcon, WrenchIcon, ArchiveBoxIcon } from '@heroicons/react/24/outline';
+import { EyeIcon, TagIcon, ClockIcon, CurrencyDollarIcon, ChartBarIcon, SwatchIcon, ScaleIcon, CalendarIcon, CubeIcon, ShoppingBagIcon, WrenchIcon, ArchiveBoxIcon, PencilSquareIcon, ShoppingCartIcon, ListBulletIcon } from '@heroicons/react/24/outline';
 import { useState } from 'react';
 
 // Combinar los tipos para poder trabajar con cualquier ítem del inventario
@@ -47,6 +47,9 @@ interface HerramientaMockupData {
 interface InventoryItemProps {
   item: InventoryItemType;
   onViewDetails: (item: InventoryItemType) => void;
+  onEdit?: (item: InventoryItemType) => void;
+  onOrder?: (item: InventoryItemType) => void;
+  onViewOrders?: (item: InventoryItemType) => void;
 }
 
 // Determinar el estado del ítem basado en su tipo y propiedades
@@ -289,7 +292,7 @@ function formatPrice(price: string | number): string {
   return `$${numPrice.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
 }
 
-export default function InventoryItem({ item, onViewDetails }: InventoryItemProps) {
+export default function InventoryItem({ item, onViewDetails, onEdit, onOrder, onViewOrders }: InventoryItemProps) {
   const status = getItemStatus(item);
   const reference = getItemReference(item);
   const stock = getItemStock(item);
@@ -332,11 +335,18 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
       border: '1px solid #E5E7EB',
       gap: '12px',
       transition: 'all 0.3s ease',
-      cursor: 'pointer',
       margin: '12px 0',
       fontFamily: "'Poppins', sans-serif",
       position: 'relative',
       boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+      cursor: 'pointer'
+    }}
+    onClick={(e) => {
+      // Prevenir que el clic se propague si se hace clic en los botones
+      if ((e.target as HTMLElement).closest('[data-action-button="true"]')) {
+        return;
+      }
+      onViewDetails(item);
     }}
     onMouseEnter={(e) => {
       e.currentTarget.style.transform = 'translateY(-2px)';
@@ -349,8 +359,119 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
       e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
       e.currentTarget.style.backgroundColor = 'white';
     }}
-    onClick={() => onViewDetails(item)}
     >
+      {/* Botones para materiales */}
+      {item.type === 'material' && (
+        <div style={{
+          position: 'absolute',
+          top: '12px',
+          right: '12px',
+          display: 'flex',
+          gap: '8px',
+          zIndex: 10,
+        }}>
+          {/* Botón Seguir Órdenes */}
+          <button 
+            style={{
+              backgroundColor: '#3B82F6',
+              color: 'white',
+              borderRadius: '6px',
+              padding: '8px 12px',
+              fontSize: '13px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              border: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+            data-action-button="true"
+            onClick={() => onViewOrders ? onViewOrders(item) : null}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.05)';
+              e.currentTarget.style.backgroundColor = '#2563EB';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.backgroundColor = '#3B82F6';
+            }}
+          >
+            <ListBulletIcon style={{ width: '16px', height: '16px' }} />
+            Órdenes
+          </button>
+          
+          {/* Botón Ordenar material */}
+          {onOrder && (
+            <button 
+              style={{
+                backgroundColor: '#10B981',
+                color: 'white',
+                borderRadius: '6px',
+                padding: '8px 12px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              data-action-button="true"
+              onClick={() => onOrder(item)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.backgroundColor = '#059669';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.backgroundColor = '#10B981';
+              }}
+            >
+              <ShoppingCartIcon style={{ width: '16px', height: '16px' }} />
+              Ordenar
+            </button>
+          )}
+          
+          {/* Botón Editar material */}
+          {onEdit && (
+            <button 
+              style={{
+                backgroundColor: '#4F46E5',
+                color: 'white',
+                borderRadius: '6px',
+                padding: '8px 12px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              data-action-button="true"
+              onClick={() => onEdit(item)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.backgroundColor = '#4338CA';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.backgroundColor = '#4F46E5';
+              }}
+            >
+              <PencilSquareIcon style={{ width: '16px', height: '16px' }} />
+              Editar
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Sección principal con información básica */}
       <div style={{
         display: 'flex',
@@ -691,7 +812,7 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
               </div>
             </div>
             
-            {/* Color */}
+            {/* Categoría */}
             <div style={{
               backgroundColor: '#F9FAFB',
               padding: '8px 12px',
@@ -700,7 +821,7 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
               minWidth: '110px',
             }}>
               <div style={{ fontSize: '13px', color: '#6B7280' }}>
-                Color
+                Categoría
               </div>
               <div style={{ 
                 marginTop: '4px', 
@@ -708,11 +829,11 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
                 fontWeight: 500,
                 color: '#111827'
               }}>
-                {materialInfo.color}
+                {(item as Material & { type: 'material' }).categoria || 'No especificada'}
               </div>
             </div>
             
-            {/* Calidad */}
+            {/* Ubicación */}
             <div style={{
               backgroundColor: '#F9FAFB',
               padding: '8px 12px',
@@ -721,7 +842,7 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
               minWidth: '110px',
             }}>
               <div style={{ fontSize: '13px', color: '#6B7280' }}>
-                Calidad
+                Ubicación
               </div>
               <div style={{ 
                 marginTop: '4px', 
@@ -729,7 +850,7 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
                 fontWeight: 500,
                 color: '#111827'
               }}>
-                {materialInfo.calidad}
+                {(item as Material & { type: 'material' }).ubicacion || 'No especificada'}
               </div>
             </div>
             
@@ -754,6 +875,28 @@ export default function InventoryItem({ item, onViewDetails }: InventoryItemProp
               </div>
             </div>
           </div>
+          
+          {/* Descripción si existe */}
+          {(item as Material & { type: 'material' }).descripcion && (
+            <div style={{ 
+              marginTop: '12px',
+              backgroundColor: '#F9FAFB',
+              padding: '12px',
+              borderRadius: '8px',
+              border: '1px solid #E5E7EB',
+            }}>
+              <div style={{ fontSize: '13px', color: '#6B7280', marginBottom: '4px' }}>
+                Descripción
+              </div>
+              <div style={{ 
+                fontSize: '14px',
+                color: '#374151',
+                lineHeight: '1.4'
+              }}>
+                {(item as Material & { type: 'material' }).descripcion}
+              </div>
+            </div>
+          )}
         </div>
       )}
       
