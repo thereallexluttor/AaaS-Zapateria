@@ -5,11 +5,16 @@ import ProductoFormComponent from '../components/ProductoForm';
 import HerramientaFormComponent from '../components/HerramientaForm';
 import OrdenMaterialForm from '../components/OrdenMaterialForm';
 import MaterialOrdenList from '../components/MaterialOrdenList';
+import HerramientaDañoFormComponent from '../components/HerramientaDañoForm';
+import HerramientaMantenimientoFormComponent from '../components/HerramientaMantenimientoForm';
+import HerramientaMantenimientoListComponent from '../components/HerramientaMantenimientoList';
+import HerramientaDañoListComponent from '../components/HerramientaDañoList';
 import InventoryItem, { InventoryItemType } from '../components/InventoryItem';
 import { useInventario } from '../lib/hooks';
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
+import { Herramienta } from '../lib/types';
 
-type ModalType = 'material' | 'producto' | 'herramienta' | 'ordenMaterial' | null;
+type ModalType = 'material' | 'producto' | 'herramienta' | 'ordenMaterial' | 'herramientaDaño' | 'herramientaMantenimiento' | 'herramientaMantenimientoList' | 'herramientaDañoList' | null;
 type FilterTab = 'materiales' | 'productos' | 'herramientas';
 type ViewMode = 'list' | 'materialOrdenes';
 
@@ -143,6 +148,42 @@ function Inventario() {
   const handleBackToList = useCallback(() => {
     setViewMode('list');
     setSelectedItem(null);
+  }, []);
+
+  // Nueva función para reportar daños en herramientas
+  const handleReportDamage = useCallback((item: InventoryItemType) => {
+    if (item.type === 'herramienta') {
+      setSelectedItem(item);
+      setActiveModal('herramientaDaño');
+      console.log('Reportar daño de herramienta:', item);
+    }
+  }, []);
+
+  // Nueva función para programar mantenimiento de herramientas
+  const handleScheduleMaintenance = useCallback((item: InventoryItemType) => {
+    if (item.type === 'herramienta') {
+      setSelectedItem(item);
+      setActiveModal('herramientaMantenimiento');
+      console.log('Programar mantenimiento de herramienta:', item);
+    }
+  }, []);
+
+  // Nueva función para ver mantenimientos de herramientas
+  const handleViewMaintenance = useCallback((item: InventoryItemType) => {
+    if (item.type === 'herramienta') {
+      setSelectedItem(item);
+      setActiveModal('herramientaMantenimientoList');
+      console.log('Ver mantenimientos de herramienta:', item);
+    }
+  }, []);
+
+  // Nueva función para ver daños/reparaciones de herramientas
+  const handleViewDamages = useCallback((item: InventoryItemType) => {
+    if (item.type === 'herramienta') {
+      setSelectedItem(item);
+      setActiveModal('herramientaDañoList');
+      console.log('Ver daños/reparaciones de herramienta:', item);
+    }
   }, []);
 
   // Filtrar elementos según la pestaña activa
@@ -365,6 +406,10 @@ function Inventario() {
                   onEdit={item.type === 'material' ? handleEditMaterial : undefined}
                   onOrder={item.type === 'material' ? handleOrderMaterial : undefined}
                   onViewOrders={item.type === 'material' ? handleViewMaterialOrders : undefined}
+                  onReportDamage={item.type === 'herramienta' ? handleReportDamage : undefined}
+                  onScheduleMaintenance={item.type === 'herramienta' ? handleScheduleMaintenance : undefined}
+                  onViewMaintenance={item.type === 'herramienta' ? handleViewMaintenance : undefined}
+                  onViewDamages={item.type === 'herramienta' ? handleViewDamages : undefined}
                 />
               </div>
             ))}
@@ -406,7 +451,7 @@ function Inventario() {
     }}>
       {renderContent()}
       
-      {/* Modal para agregar, editar o ordenar elementos */}
+      {/* Modal para agregar, editar, ordenar o reportar elementos */}
       {activeModal && (
         <div 
           style={{
@@ -452,6 +497,38 @@ function Inventario() {
               onClose={closeModal}
               isClosing={isClosing}
               material={selectedItem}
+            />
+          )}
+
+          {activeModal === 'herramientaDaño' && (
+            <HerramientaDañoFormComponent
+              onClose={closeModal}
+              isClosing={isClosing}
+              herramienta={selectedItem as (Herramienta & { type: 'herramienta' }) | null}
+            />
+          )}
+
+          {activeModal === 'herramientaMantenimiento' && (
+            <HerramientaMantenimientoFormComponent
+              onClose={closeModal}
+              isClosing={isClosing}
+              herramienta={selectedItem as (Herramienta & { type: 'herramienta' }) | null}
+            />
+          )}
+
+          {activeModal === 'herramientaMantenimientoList' && (
+            <HerramientaMantenimientoListComponent
+              onClose={closeModal}
+              isClosing={isClosing}
+              herramienta={selectedItem as (Herramienta & { type: 'herramienta' }) | null}
+            />
+          )}
+
+          {activeModal === 'herramientaDañoList' && (
+            <HerramientaDañoListComponent
+              onClose={closeModal}
+              isClosing={isClosing}
+              herramienta={selectedItem as (Herramienta & { type: 'herramienta' }) | null}
             />
           )}
         </div>
