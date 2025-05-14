@@ -1,5 +1,5 @@
 import { Material, Herramienta, Producto } from '../lib/supabase';
-import { EyeIcon, TagIcon, ClockIcon, CurrencyDollarIcon, ChartBarIcon, SwatchIcon, ScaleIcon, CalendarIcon, CubeIcon, ShoppingBagIcon, WrenchIcon, ArchiveBoxIcon, PencilSquareIcon, ShoppingCartIcon, ListBulletIcon } from '@heroicons/react/24/outline';
+import { EyeIcon, TagIcon, ClockIcon, CurrencyDollarIcon, ChartBarIcon, SwatchIcon, ScaleIcon, CalendarIcon, CubeIcon, ShoppingBagIcon, WrenchIcon, ArchiveBoxIcon, PencilSquareIcon, ShoppingCartIcon, ListBulletIcon, ExclamationTriangleIcon, ClipboardDocumentCheckIcon } from '@heroicons/react/24/outline';
 import { useState } from 'react';
 
 // Combinar los tipos para poder trabajar con cualquier ítem del inventario
@@ -44,12 +44,16 @@ interface HerramientaMockupData {
   accesorios: string[];
 }
 
-interface InventoryItemProps {
+export interface InventoryItemProps {
   item: InventoryItemType;
   onViewDetails: (item: InventoryItemType) => void;
   onEdit?: (item: InventoryItemType) => void;
   onOrder?: (item: InventoryItemType) => void;
   onViewOrders?: (item: InventoryItemType) => void;
+  onReportDamage?: (item: InventoryItemType) => void;
+  onScheduleMaintenance?: (item: InventoryItemType) => void;
+  onViewMaintenance?: (item: InventoryItemType) => void;
+  onViewDamages?: (item: InventoryItemType) => void;
 }
 
 // Determinar el estado del ítem basado en su tipo y propiedades
@@ -292,7 +296,17 @@ function formatPrice(price: string | number): string {
   return `$${numPrice.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
 }
 
-export default function InventoryItem({ item, onViewDetails, onEdit, onOrder, onViewOrders }: InventoryItemProps) {
+export default function InventoryItem({ 
+  item, 
+  onViewDetails, 
+  onEdit, 
+  onOrder, 
+  onViewOrders,
+  onReportDamage,
+  onScheduleMaintenance,
+  onViewMaintenance,
+  onViewDamages
+}: InventoryItemProps) {
   const status = getItemStatus(item);
   const reference = getItemReference(item);
   const stock = getItemStock(item);
@@ -467,6 +481,154 @@ export default function InventoryItem({ item, onViewDetails, onEdit, onOrder, on
             >
               <PencilSquareIcon style={{ width: '16px', height: '16px' }} />
               Editar
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Botones para herramientas */}
+      {item.type === 'herramienta' && (
+        <div style={{
+          position: 'absolute',
+          top: '12px',
+          right: '12px',
+          display: 'flex',
+          gap: '8px',
+          zIndex: 10,
+        }}>
+          {/* Botón Ver Daños y Reparaciones */}
+          {onViewDamages && (
+            <button 
+              style={{
+                backgroundColor: '#F97316',
+                color: 'white',
+                borderRadius: '6px',
+                padding: '8px 12px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              data-action-button="true"
+              onClick={() => onViewDamages(item)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.backgroundColor = '#EA580C';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.backgroundColor = '#F97316';
+              }}
+            >
+              <ExclamationTriangleIcon style={{ width: '16px', height: '16px' }} />
+              Ver Reparaciones
+            </button>
+          )}
+          
+          {/* Botón Ver Mantenimientos */}
+          {onViewMaintenance && (
+            <button 
+              style={{
+                backgroundColor: '#8B5CF6',
+                color: 'white',
+                borderRadius: '6px',
+                padding: '8px 12px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              data-action-button="true"
+              onClick={() => onViewMaintenance(item)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.backgroundColor = '#7C3AED';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.backgroundColor = '#8B5CF6';
+              }}
+            >
+              <WrenchIcon style={{ width: '16px', height: '16px' }} />
+              Ver Mantenimientos
+            </button>
+          )}
+          
+          {/* Botón Programar Mantenimiento */}
+          {onScheduleMaintenance && (
+            <button 
+              style={{
+                backgroundColor: '#3B82F6',
+                color: 'white',
+                borderRadius: '6px',
+                padding: '8px 12px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              data-action-button="true"
+              onClick={() => onScheduleMaintenance(item)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.backgroundColor = '#2563EB';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.backgroundColor = '#3B82F6';
+              }}
+            >
+              <ClipboardDocumentCheckIcon style={{ width: '16px', height: '16px' }} />
+              Mantenimiento
+            </button>
+          )}
+          
+          {/* Botón Reportar Daño */}
+          {onReportDamage && (
+            <button 
+              style={{
+                backgroundColor: '#EF4444',
+                color: 'white',
+                borderRadius: '6px',
+                padding: '8px 12px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              data-action-button="true"
+              onClick={() => onReportDamage(item)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.backgroundColor = '#DC2626';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.backgroundColor = '#EF4444';
+              }}
+            >
+              <ExclamationTriangleIcon style={{ width: '16px', height: '16px' }} />
+              Reportar daño
             </button>
           )}
         </div>
