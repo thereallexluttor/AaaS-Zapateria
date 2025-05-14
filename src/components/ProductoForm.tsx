@@ -4,6 +4,7 @@ import { useInventario } from '../lib/hooks';
 import { uploadImageToSupabase, generateQRCode } from '../lib/hooks';
 import QRCodeModal from './QRCodeModal';
 import { supabase } from '../lib/supabase';
+import { InventoryItemType } from './InventoryItem';
 
 // Estilo global para aplicar Helvetica Neue a todo el componente
 const globalStyles = {
@@ -74,9 +75,11 @@ export interface ProductoForm {
 interface ProductoFormProps {
   onClose: () => void;
   isClosing: boolean;
+  isEditMode?: boolean;
+  productoToEdit?: InventoryItemType | null;
 }
 
-function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
+function ProductoFormComponent({ onClose, isClosing, isEditMode = false, productoToEdit = null }: ProductoFormProps) {
   const formImageInputRef = useRef<HTMLInputElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -88,7 +91,7 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
   const [savedItemId, setSavedItemId] = useState<string>('');
   
   // Usamos el hook personalizado para inventario
-  const { addInventarioItem } = useInventario();
+  const { } = useInventario();
   
   // Estado para errores del servidor
   const [serverError, setServerError] = useState<string | null>(null);
@@ -128,6 +131,56 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
     stock: '',
     stockMinimo: ''
   });
+
+  // Cargar datos del producto si estamos en modo edición
+  useEffect(() => {
+    if (isEditMode && productoToEdit && productoToEdit.type === 'producto') {
+      const fetchProductoDetails = async () => {
+        try {
+          // Obtener detalles completos del producto desde Supabase
+          const { data, error } = await supabase
+            .from('productos_table')
+            .select('*')
+            .eq('id', productoToEdit.id)
+            .single();
+            
+          if (error) throw error;
+          
+          if (data) {
+            // Mapear los datos del producto al formulario
+            setProductoForm({
+              nombre: data.nombre || '',
+              precio: data.precio ? data.precio.toString() : '',
+              categoria: data.categoria || '',
+              descripcion: data.descripcion || '',
+              materiales: data.materiales || [],
+              herramientas: data.herramientas || [],
+              tallas: data.tallas ? data.tallas.map((talla: any) => ({
+                numero: talla.numero || '',
+                stock: talla.stock ? talla.stock.toString() : '',
+                stockMinimo: talla.stockMinimo ? talla.stockMinimo.toString() : ''
+              })) : [],
+              colores: data.colores || '',
+              tiempoFabricacion: data.tiempo_fabricacion ? data.tiempo_fabricacion.toString() : '',
+              destacado: data.destacado || false,
+              imagenUrl: data.imagen_url || undefined,
+              qrCode: data.qr_code || undefined
+            });
+            
+            // Si hay imagen, mostrar la previsualización
+            if (data.imagen_url) {
+              setImagePreview(data.imagen_url);
+            }
+          }
+        } catch (error) {
+          console.error('Error al cargar los detalles del producto:', error);
+          setServerError('No se pudieron cargar los detalles del producto.');
+        }
+      };
+      
+      fetchProductoDetails();
+    }
+  }, [isEditMode, productoToEdit]);
 
   // Fetch materials on component mount
   useEffect(() => {
@@ -334,43 +387,64 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
         imagen_url: productoForm.imagenUrl
       };
       
-      // Insertar directamente en la tabla productos_table
-      const { data, error } = await supabase
-        .from('productos_table')
-        .insert(productoData)
-        .select()
-        .single();
-      
-      if (error) {
-        throw error;
-      }
-      
-      if (data) {
-        console.log('Producto guardado con éxito:', data);
+      if (isEditMode && productoToEdit) {
+        // Actualizar producto existente
+        const { data, error } = await supabase
+          .from('productos_table')
+          .update(productoData)
+          .eq('id', productoToEdit.id)
+          .select()
+          .single();
         
-        // Generar QR code para el producto
-        const qrCode = await generateQRCode('producto', data.id);
-        
-        // Actualizar el registro con el código QR
-        if (qrCode) {
-          const { error: updateError } = await supabase
-            .from('productos_table')
-            .update({ qr_code: qrCode })
-            .eq('id', data.id);
-          
-          if (updateError) {
-            console.error('Error al guardar el código QR:', updateError);
-          }
+        if (error) {
+          throw error;
         }
         
-        // Cerrar el formulario sin mostrar el modal de QR
-        onClose();
+        if (data) {
+          console.log('Producto actualizado con éxito:', data);
+          onClose();
+        } else {
+          throw new Error('No se pudo actualizar el producto');
+        }
       } else {
-        throw new Error('No se pudo guardar el producto');
+        // Crear nuevo producto
+        const { data, error } = await supabase
+          .from('productos_table')
+          .insert(productoData)
+          .select()
+          .single();
+        
+        if (error) {
+          throw error;
+        }
+        
+        if (data) {
+          console.log('Producto guardado con éxito:', data);
+          
+          // Generar QR code para el producto
+          const qrCode = await generateQRCode('producto', data.id);
+          
+          // Actualizar el registro con el código QR
+          if (qrCode) {
+            const { error: updateError } = await supabase
+              .from('productos_table')
+              .update({ qr_code: qrCode })
+              .eq('id', data.id);
+            
+            if (updateError) {
+              console.error('Error al guardar el código QR:', updateError);
+            }
+          }
+          
+          // Cerrar el formulario sin mostrar el modal de QR
+          onClose();
+        } else {
+          throw new Error('No se pudo guardar el producto');
+        }
       }
     } catch (error: any) {
-      console.error('Error al guardar el producto:', error);
-      setServerError('Ocurrió un error al guardar. Intente nuevamente.');
+      console.error(`Error al ${isEditMode ? 'actualizar' : 'guardar'} el producto:`, error);
+      setServerError(`Ocurrió un error al ${isEditMode ? 'actualizar' : 'guardar'}. Intente nuevamente.`);
       if (error.message) {
         console.error('Mensaje de error:', error.message);
       }
@@ -487,7 +561,7 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
           id="producto-form-title"
           style={{ fontSize: '20px', fontWeight: 400, margin: 0, fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
         >
-          Agregar producto
+          {isEditMode ? 'Editar producto' : 'Agregar producto'}
         </h2>
       </header>
       
@@ -797,8 +871,53 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
                     borderBottom: index < productoForm.tallas.length - 1 ? '1px solid #f0f0f0' : 'none'
                   }}>
                     <div>{talla.numero}</div>
-                    <div>{talla.stock}</div>
-                    <div>{talla.stockMinimo}</div>
+                    {isEditMode ? (
+                      <>
+                        <input
+                          type="text"
+                          value={talla.stock}
+                          onChange={(e) => {
+                            const updatedTallas = [...productoForm.tallas];
+                            updatedTallas[index].stock = e.target.value;
+                            setProductoForm(prev => ({
+                              ...prev,
+                              tallas: updatedTallas
+                            }));
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '6px',
+                            borderRadius: '4px',
+                            border: '1px solid #ddd',
+                            fontSize: '14px',
+                          }}
+                        />
+                        <input
+                          type="text"
+                          value={talla.stockMinimo}
+                          onChange={(e) => {
+                            const updatedTallas = [...productoForm.tallas];
+                            updatedTallas[index].stockMinimo = e.target.value;
+                            setProductoForm(prev => ({
+                              ...prev,
+                              tallas: updatedTallas
+                            }));
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '6px',
+                            borderRadius: '4px',
+                            border: '1px solid #ddd',
+                            fontSize: '14px',
+                          }}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <div>{talla.stock}</div>
+                        <div>{talla.stockMinimo}</div>
+                      </>
+                    )}
                     <button
                       type="button"
                       onClick={() => eliminarTalla(index)}
@@ -1285,7 +1404,7 @@ function ProductoFormComponent({ onClose, isClosing }: ProductoFormProps) {
             onMouseEnter={(e) => !isSaving && !materialsLoading && (e.currentTarget.style.transform = 'translateY(-2px)')}
             onMouseLeave={(e) => !isSaving && !materialsLoading && (e.currentTarget.style.transform = 'translateY(0)')}
           >
-            {isSaving ? 'Guardando...' : 'Añadir producto'}
+            {isSaving ? 'Guardando...' : isEditMode ? 'Actualizar producto' : 'Añadir producto'}
           </button>
         </div>
       </form>
