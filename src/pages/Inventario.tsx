@@ -9,12 +9,13 @@ import HerramientaDañoFormComponent from '../components/HerramientaDañoForm';
 import HerramientaMantenimientoFormComponent from '../components/HerramientaMantenimientoForm';
 import HerramientaMantenimientoListComponent from '../components/HerramientaMantenimientoList';
 import HerramientaDañoListComponent from '../components/HerramientaDañoList';
+import VentasHistorial from '../components/VentasHistorial';
 import InventoryItem, { InventoryItemType } from '../components/InventoryItem';
 import { useInventario } from '../lib/hooks';
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import { Herramienta } from '../lib/types';
 
-type ModalType = 'material' | 'producto' | 'herramienta' | 'ordenMaterial' | 'herramientaDaño' | 'herramientaMantenimiento' | 'herramientaMantenimientoList' | 'herramientaDañoList' | null;
+type ModalType = 'material' | 'producto' | 'herramienta' | 'ordenMaterial' | 'herramientaDaño' | 'herramientaMantenimiento' | 'herramientaMantenimientoList' | 'herramientaDañoList' | 'ventasHistorial' | null;
 type FilterTab = 'materiales' | 'productos' | 'herramientas';
 type ViewMode = 'list' | 'materialOrdenes';
 
@@ -136,6 +137,15 @@ function Inventario() {
     }
   }, []);
 
+  // Nueva función para editar productos
+  const handleEditProducto = useCallback((item: InventoryItemType) => {
+    if (item.type === 'producto') {
+      setSelectedItem(item);
+      setIsEditMode(true);
+      setActiveModal('producto');
+    }
+  }, []);
+
   // Nueva función para ordenar materiales
   const handleOrderMaterial = useCallback((item: InventoryItemType) => {
     if (item.type === 'material') {
@@ -183,6 +193,15 @@ function Inventario() {
       setSelectedItem(item);
       setActiveModal('herramientaDañoList');
       console.log('Ver daños/reparaciones de herramienta:', item);
+    }
+  }, []);
+
+  // Nueva función para ver historial de ventas de productos
+  const handleViewSalesHistory = useCallback((item: InventoryItemType) => {
+    if (item.type === 'producto') {
+      setSelectedItem(item);
+      setActiveModal('ventasHistorial');
+      console.log('Ver historial de ventas de producto:', item);
     }
   }, []);
 
@@ -403,13 +422,20 @@ function Inventario() {
                 <InventoryItem 
                   item={item} 
                   onViewDetails={handleViewDetails}
-                  onEdit={item.type === 'material' ? handleEditMaterial : undefined}
+                  onEdit={
+                    item.type === 'material' 
+                      ? handleEditMaterial 
+                      : item.type === 'producto' 
+                        ? handleEditProducto 
+                        : undefined
+                  }
                   onOrder={item.type === 'material' ? handleOrderMaterial : undefined}
                   onViewOrders={item.type === 'material' ? handleViewMaterialOrders : undefined}
                   onReportDamage={item.type === 'herramienta' ? handleReportDamage : undefined}
                   onScheduleMaintenance={item.type === 'herramienta' ? handleScheduleMaintenance : undefined}
                   onViewMaintenance={item.type === 'herramienta' ? handleViewMaintenance : undefined}
                   onViewDamages={item.type === 'herramienta' ? handleViewDamages : undefined}
+                  onViewSalesHistory={item.type === 'producto' ? handleViewSalesHistory : undefined}
                 />
               </div>
             ))}
@@ -482,6 +508,8 @@ function Inventario() {
             <ProductoFormComponent 
               onClose={closeModal}
               isClosing={isClosing}
+              isEditMode={isEditMode}
+              productoToEdit={isEditMode ? selectedItem : null}
             />
           )}
           
@@ -529,6 +557,15 @@ function Inventario() {
               onClose={closeModal}
               isClosing={isClosing}
               herramienta={selectedItem as (Herramienta & { type: 'herramienta' }) | null}
+            />
+          )}
+
+          {activeModal === 'ventasHistorial' && selectedItem && selectedItem.type === 'producto' && (
+            <VentasHistorial
+              onClose={closeModal}
+              isClosing={isClosing}
+              productoId={selectedItem.id ? Number(selectedItem.id) : null}
+              productoNombre={selectedItem.nombre}
             />
           )}
         </div>

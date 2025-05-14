@@ -1,5 +1,5 @@
 import { Material, Herramienta, Producto } from '../lib/supabase';
-import { EyeIcon, TagIcon, ClockIcon, CurrencyDollarIcon, ChartBarIcon, SwatchIcon, ScaleIcon, CalendarIcon, CubeIcon, ShoppingBagIcon, WrenchIcon, ArchiveBoxIcon, PencilSquareIcon, ShoppingCartIcon, ListBulletIcon, ExclamationTriangleIcon, ClipboardDocumentCheckIcon } from '@heroicons/react/24/outline';
+import { EyeIcon, TagIcon, ClockIcon, CurrencyDollarIcon, ChartBarIcon, SwatchIcon, ScaleIcon, CalendarIcon, CubeIcon, ShoppingBagIcon, WrenchIcon, ArchiveBoxIcon, PencilSquareIcon, ShoppingCartIcon, ListBulletIcon, ExclamationTriangleIcon, ClipboardDocumentCheckIcon, ReceiptRefundIcon } from '@heroicons/react/24/outline';
 import { useState } from 'react';
 
 // Combinar los tipos para poder trabajar con cualquier ítem del inventario
@@ -54,6 +54,7 @@ export interface InventoryItemProps {
   onScheduleMaintenance?: (item: InventoryItemType) => void;
   onViewMaintenance?: (item: InventoryItemType) => void;
   onViewDamages?: (item: InventoryItemType) => void;
+  onViewSalesHistory?: (item: InventoryItemType) => void;
 }
 
 // Determinar el estado del ítem basado en su tipo y propiedades
@@ -305,7 +306,8 @@ export default function InventoryItem({
   onReportDamage,
   onScheduleMaintenance,
   onViewMaintenance,
-  onViewDamages
+  onViewDamages,
+  onViewSalesHistory
 }: InventoryItemProps) {
   const status = getItemStatus(item);
   const reference = getItemReference(item);
@@ -629,6 +631,86 @@ export default function InventoryItem({
             >
               <ExclamationTriangleIcon style={{ width: '16px', height: '16px' }} />
               Reportar daño
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Botones para productos */}
+      {item.type === 'producto' && (
+        <div style={{
+          position: 'absolute',
+          top: '12px',
+          right: '12px',
+          display: 'flex',
+          gap: '8px',
+          zIndex: 10,
+        }}>
+          {/* Botón Ver historial de ventas */}
+          {onViewSalesHistory && (
+            <button 
+              style={{
+                backgroundColor: '#F59E0B',
+                color: 'white',
+                borderRadius: '6px',
+                padding: '8px 12px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              data-action-button="true"
+              onClick={() => onViewSalesHistory(item)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.backgroundColor = '#D97706';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.backgroundColor = '#F59E0B';
+              }}
+            >
+              <ReceiptRefundIcon style={{ width: '16px', height: '16px' }} />
+              Ver ventas
+            </button>
+          )}
+          
+          {/* Botón Editar producto */}
+          {onEdit && (
+            <button 
+              style={{
+                backgroundColor: '#4F46E5',
+                color: 'white',
+                borderRadius: '6px',
+                padding: '8px 12px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              data-action-button="true"
+              onClick={() => onEdit(item)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.backgroundColor = '#4338CA';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.backgroundColor = '#4F46E5';
+              }}
+            >
+              <PencilSquareIcon style={{ width: '16px', height: '16px' }} />
+              Editar
             </button>
           )}
         </div>
