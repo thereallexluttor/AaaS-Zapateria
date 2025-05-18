@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ArrowLeftIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { useInventario } from '../lib/hooks';
 import { uploadImageToSupabase, generateQRCode } from '../lib/hooks';
@@ -56,9 +56,11 @@ export interface HerramientaForm {
 interface HerramientaFormProps {
   onClose: () => void;
   isClosing: boolean;
+  isEditMode?: boolean;
+  herramientaToEdit?: any | null;
 }
 
-function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) {
+function HerramientaFormComponent({ onClose, isClosing, isEditMode = false, herramientaToEdit = null }: HerramientaFormProps) {
   const formImageInputRef = useRef<HTMLInputElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -70,7 +72,7 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
   const [savedItemId, setSavedItemId] = useState<string>('');
   
   // Usamos el hook personalizado para inventario
-  const { addInventarioItem } = useInventario();
+  const { addInventarioItem, updateInventarioItem } = useInventario();
   
   // Estado para errores del servidor
   const [serverError, setServerError] = useState<string | null>(null);
@@ -94,6 +96,30 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
 
   // Estado para previsualización de imagen
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  // Cargar datos de la herramienta si estamos en modo de edición
+  useEffect(() => {
+    if (isEditMode && herramientaToEdit) {
+      setHerramientaForm({
+        nombre: herramientaToEdit.nombre || '',
+        modelo: herramientaToEdit.modelo || '',
+        numeroSerie: herramientaToEdit.numeroSerie || herramientaToEdit.numero_serie || '',
+        estado: herramientaToEdit.estado || '',
+        fechaAdquisicion: herramientaToEdit.fechaAdquisicion || herramientaToEdit.fecha_adquisicion || '',
+        ultimoMantenimiento: herramientaToEdit.ultimoMantenimiento || herramientaToEdit.ultimo_mantenimiento || '',
+        proximoMantenimiento: herramientaToEdit.proximoMantenimiento || herramientaToEdit.proximo_mantenimiento || '',
+        ubicacion: herramientaToEdit.ubicacion || '',
+        responsable: herramientaToEdit.responsable || '',
+        descripcion: herramientaToEdit.descripcion || '',
+        imagenUrl: herramientaToEdit.imagenUrl || herramientaToEdit.imagen_url || ''
+      });
+
+      // Si hay una imagen, cargarla para mostrar en la previsualización
+      if (herramientaToEdit.imagenUrl || herramientaToEdit.imagen_url) {
+        setImagePreview(herramientaToEdit.imagenUrl || herramientaToEdit.imagen_url);
+      }
+    }
+  }, [isEditMode, herramientaToEdit]);
 
   const handleHerramientaChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -151,30 +177,43 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
         imagen_url: herramientaForm.imagenUrl
       };
       
-      // Usar el hook de inventario para agregar la herramienta
-      // El código QR se genera y guarda automáticamente dentro del hook
-      const result = await addInventarioItem('herramienta', herramientaData);
+      let result;
       
-      if (result && result.id) {
-        console.log('Herramienta guardada con éxito:', result);
+      if (isEditMode && herramientaToEdit) {
+        // Actualizar herramienta existente
+        result = await updateInventarioItem('herramienta', herramientaToEdit.id, herramientaData);
         
-        // El QR ya fue generado y guardado en el hook, solo necesitamos obtenerlo para mostrar
-        // Si el resultado tiene la URL del QR, usamos esa
-        if (result.qr_code) {
-          setQrCodeUrl(result.qr_code);
+        if (result) {
+          console.log('Herramienta actualizada con éxito:', result);
+          onClose(); // Cerrar el modal sin mostrar QR
         } else {
-          // Si por alguna razón no tiene el QR, generamos uno solo para mostrar
-          // pero no lo guardamos de nuevo
-          const qrCode = await generateQRCode('herramienta', result.id);
-          setQrCodeUrl(qrCode);
+          setServerError('No se pudo actualizar la herramienta. Intente nuevamente.');
         }
-        
-        setSavedItemId(result.id);
-        
-        // Mostrar modal con el código QR
-        setShowQrModal(true);
       } else {
-        setServerError('No se pudo guardar la herramienta. Intente nuevamente.');
+        // Crear nueva herramienta
+        result = await addInventarioItem('herramienta', herramientaData);
+        
+        if (result && result.id) {
+          console.log('Herramienta guardada con éxito:', result);
+          
+          // El QR ya fue generado y guardado en el hook, solo necesitamos obtenerlo para mostrar
+          // Si el resultado tiene la URL del QR, usamos esa
+          if (result.qr_code) {
+            setQrCodeUrl(result.qr_code);
+          } else {
+            // Si por alguna razón no tiene el QR, generamos uno solo para mostrar
+            // pero no lo guardamos de nuevo
+            const qrCode = await generateQRCode('herramienta', result.id);
+            setQrCodeUrl(qrCode);
+          }
+          
+          setSavedItemId(result.id);
+          
+          // Mostrar modal con el código QR
+          setShowQrModal(true);
+        } else {
+          setServerError('No se pudo guardar la herramienta. Intente nuevamente.');
+        }
       }
     } catch (error) {
       console.error('Error al guardar la herramienta:', error);
@@ -282,7 +321,7 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
           id="herramienta-form-title"
           style={{ fontSize: '20px', fontWeight: 400, margin: 0, fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
         >
-          Agregar herramienta
+          {isEditMode ? 'Editar herramienta' : 'Agregar herramienta'}
         </h2>
       </header>
       
@@ -650,7 +689,7 @@ function HerramientaFormComponent({ onClose, isClosing }: HerramientaFormProps) 
             onMouseEnter={(e) => !isSaving && (e.currentTarget.style.transform = 'translateY(-2px)')}
             onMouseLeave={(e) => !isSaving && (e.currentTarget.style.transform = 'translateY(0)')}
           >
-            {isSaving ? 'Guardando...' : 'Añadir herramienta'}
+            {isSaving ? 'Guardando...' : isEditMode ? 'Actualizar herramienta' : 'Añadir herramienta'}
           </button>
         </div>
       </form>

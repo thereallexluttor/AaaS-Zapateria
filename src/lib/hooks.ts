@@ -1468,4 +1468,120 @@ export function useTrabajadores() {
     updateTrabajador,
     deleteTrabajador
   };
+}
+
+// Hook para obtener las tareas completadas de un trabajador específico
+export function useTareasTrabajador() {
+  const [tareas, setTareas] = useState<any[]>([]);
+  const [tareasAgrupadas, setTareasAgrupadas] = useState<{
+    diarias: any[];
+    semanales: any[];
+    mensuales: any[];
+  }>({
+    diarias: [],
+    semanales: [],
+    mensuales: []
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Obtener tareas completadas para un trabajador específico
+  const getTareasTrabajador = useCallback(async (trabajadorId: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('Obteniendo tareas para trabajador ID:', trabajadorId);
+      
+      // Convertir el trabajadorId a número, ya que la base de datos espera un entero
+      const trabajadorIdNumerico = parseInt(trabajadorId, 10);
+      
+      if (isNaN(trabajadorIdNumerico)) {
+        throw new Error('ID de trabajador inválido');
+      }
+
+      // Obtener la fecha actual
+      const hoy = new Date();
+      const inicioSemana = new Date(hoy);
+      inicioSemana.setDate(hoy.getDate() - hoy.getDay()); // Domingo de la semana actual
+      const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+
+      // Formatear fechas para la consulta
+      const formatoFecha = (fecha: Date) => fecha.toISOString().split('T')[0];
+      const fechaHoy = formatoFecha(hoy);
+      const fechaInicioSemana = formatoFecha(inicioSemana);
+      const fechaInicioMes = formatoFecha(inicioMes);
+
+      console.log('Consultando tareas completadas con estado=Completado');
+      
+      // Obtener todas las tareas completadas del trabajador
+      const { data, error } = await supabase
+        .from('tareas_produccion')
+        .select(`
+          id, 
+          venta_id, 
+          numero_producto, 
+          producto_id, 
+          paso_id, 
+          nombre_paso, 
+          descripcion, 
+          duracion_estimada, 
+          rol_requerido, 
+          estado, 
+          fecha_asignacion, 
+          fecha_inicio, 
+          fecha_fin, 
+          timer,
+          productos_table:producto_id(nombre)
+        `)
+        .eq('trabajador_id', trabajadorIdNumerico)
+        .eq('estado', 'Completado')
+        .order('fecha_fin', { ascending: false });
+
+      if (error) {
+        console.error('Error en la consulta Supabase:', error);
+        throw error;
+      }
+
+      console.log(`Se encontraron ${data?.length || 0} tareas completadas`);
+      
+      const allTareas = data || [];
+      setTareas(allTareas);
+
+      // Filtrar tareas por día, semana y mes
+      const tareasHoy = allTareas.filter(tarea => 
+        tarea.fecha_fin && tarea.fecha_fin.startsWith(fechaHoy)
+      );
+      
+      const tareasSemana = allTareas.filter(tarea => 
+        tarea.fecha_fin && tarea.fecha_fin >= fechaInicioSemana
+      );
+      
+      const tareasMes = allTareas.filter(tarea => 
+        tarea.fecha_fin && tarea.fecha_fin >= fechaInicioMes
+      );
+
+      console.log(`Tareas agrupadas - Hoy: ${tareasHoy.length}, Semana: ${tareasSemana.length}, Mes: ${tareasMes.length}`);
+      
+      setTareasAgrupadas({
+        diarias: tareasHoy,
+        semanales: tareasSemana,
+        mensuales: tareasMes
+      });
+
+    } catch (err) {
+      console.error('Error al obtener tareas del trabajador:', err);
+      setError(err instanceof Error ? err.message : 'Error al obtener tareas');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return {
+    tareas,
+    tareasAgrupadas,
+    loading,
+    error,
+    getTareasTrabajador
+  };
 } 

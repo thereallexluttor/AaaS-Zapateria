@@ -1,5 +1,5 @@
 import { Cliente } from '../lib/supabase';
-import { EyeIcon, UserIcon, PhoneIcon, EnvelopeIcon, MapPinIcon, ClockIcon, CurrencyDollarIcon, BuildingOfficeIcon } from '@heroicons/react/24/outline';
+import { EyeIcon, UserIcon, PhoneIcon, EnvelopeIcon, MapPinIcon, ClockIcon, CurrencyDollarIcon, BuildingOfficeIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import { useState } from 'react';
 
 export type ClienteItemType = Cliente & { 
@@ -12,6 +12,7 @@ interface ClienteItemProps {
   onViewDetails: (cliente: ClienteItemType) => void;
   isSelected?: boolean;
   onSelect?: (cliente: ClienteItemType, selected: boolean) => void;
+  onViewEstadisticas?: (cliente: ClienteItemType) => void;
 }
 
 function getClienteImage(cliente: ClienteItemType) {
@@ -79,7 +80,7 @@ function formatPrice(price: string | undefined): string {
   return `€${parseFloat(price).toFixed(2)}`;
 }
 
-export default function ClienteItem({ cliente, onViewDetails, isSelected = false, onSelect }: ClienteItemProps) {
+export default function ClienteItem({ cliente, onViewDetails, isSelected = false, onSelect, onViewEstadisticas }: ClienteItemProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [detailsVisible, setDetailsVisible] = useState(false);
   
@@ -110,6 +111,13 @@ export default function ClienteItem({ cliente, onViewDetails, isSelected = false
   const handleViewDetails = () => {
     setDetailsVisible(!detailsVisible);
     onViewDetails(cliente);
+  };
+
+  const handleViewEstadisticas = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Evitar que se propague al elemento padre
+    if (onViewEstadisticas) {
+      onViewEstadisticas(cliente);
+    }
   };
 
   const handleCheckboxClick = (e: React.MouseEvent) => {
@@ -256,11 +264,41 @@ export default function ClienteItem({ cliente, onViewDetails, isSelected = false
         justifyContent: 'flex-end',
         padding: '16px',
         flexShrink: 0,
-        color: '#4B5563'
+        color: '#4B5563',
+        gap: '8px'
       }}>
-        {/* Eliminado el div que contenía ClockIcon y fechaRegistroFormateada */}
-        
-        {/* Eliminado el botón con EyeIcon */}
+        {/* Botón de estadísticas */}
+        {onViewEstadisticas && (
+          <button
+            onClick={handleViewEstadisticas}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              padding: '6px 10px',
+              borderRadius: '6px',
+              border: '1px solid #E5E7EB',
+              backgroundColor: '#F9FAFB',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 500,
+              color: '#4F46E5',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#F3F4F6';
+              e.currentTarget.style.transform = 'translateY(-1px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#F9FAFB';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          >
+            <ChartBarIcon style={{ width: '16px', height: '16px' }} />
+            <span>Estadísticas</span>
+          </button>
+        )}
       </div>
     </div>
   );
