@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { PlusCircleIcon, ArrowDownTrayIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import ClienteFormComponent from '../components/ClienteForm';
 import ClienteItem, { ClienteItemType } from '../components/ClienteItem';
+import ClienteEstadisticas from '../components/ClienteEstadisticas';
 import { useClientes } from '../lib/hooks';
 
 // Tipos de pestañas para filtrar clientes
 type FilterTab = 'todos';
-type ModalType = 'cliente' | null;
+type ModalType = 'cliente' | 'estadisticas' | null;
 
 function Clientes() {
   const [activeModal, setActiveModal] = useState<ModalType>(null);
@@ -166,6 +167,12 @@ function Clientes() {
     setSelectedCliente(cliente);
     // Aquí se puede implementar la lógica para mostrar detalles
     console.log('Ver detalles de:', cliente);
+  }, []);
+  
+  const handleViewEstadisticas = useCallback((cliente: ClienteItemType) => {
+    setSelectedCliente(cliente);
+    openModal('estadisticas');
+    console.log('Ver estadísticas de:', cliente);
   }, []);
   
   // Preparar los clientes para mostrar
@@ -447,6 +454,7 @@ function Clientes() {
                         handleSelectCliente(cliente.id, selected);
                       }
                     }}
+                    onViewEstadisticas={handleViewEstadisticas}
                   />
                 </div>
               ))}
@@ -562,6 +570,35 @@ function Clientes() {
             onClose={closeModal}
             onSave={addCliente}
             isClosing={isClosing}
+          />
+        </div>
+      )}
+      
+      {/* Modal de estadísticas */}
+      {activeModal === 'estadisticas' && selectedCliente && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10000,
+            opacity: isClosing ? 0 : 1,
+            transition: 'opacity 0.3s ease-in-out',
+          }}
+        >
+          <ClienteEstadisticas
+            onClose={closeModal}
+            isClosing={isClosing}
+            clienteId={selectedCliente.id || ''}
+            clienteNombre={selectedCliente.tipo_cliente === 'compania' 
+              ? (selectedCliente.nombre_compania || '') 
+              : `${selectedCliente.nombre || ''} ${selectedCliente.apellidos || ''}`.trim()}
           />
         </div>
       )}

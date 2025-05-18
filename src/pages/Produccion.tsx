@@ -1,7 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { PlusCircleIcon, CalendarIcon, CurrencyDollarIcon, ShoppingBagIcon, CheckCircleIcon, ClockIcon, XCircleIcon, AdjustmentsHorizontalIcon, MagnifyingGlassIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import PedidoForm from '../components/PedidoForm';
+import PedidoCard from '../components/PedidoCard';
+import InvoicePreviewModal from '../components/InvoicePreviewModal';
 import { supabase } from '../lib/supabase';
+import { generateInvoicePDF } from '../utils/invoiceGenerator';
+import jsPDF from 'jspdf';
 
 // Definición de tipos exactamente como en la función RPC
 interface Pedido {
@@ -32,6 +36,9 @@ interface Pedido {
   pasos_produccion: number;
   tallas: string[];
   colores: string[];
+  // Información de tareas de producción
+  total_tareas: number;
+  tareas_completadas: number;
 }
 
 interface GroupedPedidos {
@@ -40,12 +47,12 @@ interface GroupedPedidos {
 
 interface PedidosPorEstado {
   pendiente: GroupedPedidos;
-  completada: GroupedPedidos;
+  completado: GroupedPedidos;
   cancelada: GroupedPedidos;
   [key: string]: GroupedPedidos; // Para cualquier otro estado que pueda existir
 }
 
-type FilterTab = 'pendiente' | 'completada' | 'cancelada';
+type FilterTab = 'pendiente' | 'completado' | 'cancelada';
 
 function Produccion() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -55,7 +62,7 @@ function Produccion() {
   const [error, setError] = useState<string | null>(null);
   const [pedidosPorEstado, setPedidosPorEstado] = useState<PedidosPorEstado>({
     pendiente: {},
-    completada: {},
+    completado: {},
     cancelada: {}
   });
   const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
@@ -66,6 +73,9 @@ function Produccion() {
   const [searchTerm, setSearchTerm] = useState('');
   const lastSearchTermRef = useRef<string>('');
   const [expandedCards, setExpandedCards] = useState<{[key: string]: boolean}>({});
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
+  const [invoicePreview, setInvoicePreview] = useState<{ document: jsPDF; invoiceNumber: string } | null>(null);
 
   // Función para obtener los pedidos usando consulta alternativa (por si falla la RPC)
   const fetchPedidosAlternativos = useCallback(async () => {
@@ -148,7 +158,9 @@ function Produccion() {
         tiempo_fabricacion: item.producto_id?.tiempo_fabricacion || 0,
         pasos_produccion: 0, // No disponible en esta consulta
         tallas: item.tallas || [],
-        colores: item.colores || []
+        colores: item.colores || [],
+        total_tareas: 0,
+        tareas_completadas: 0
       }));
       
       return transformedData;
@@ -162,7 +174,7 @@ function Produccion() {
   const agruparPedidosPorEstadoYCliente = useCallback((pedidos: Pedido[]) => {
     const result: PedidosPorEstado = {
       pendiente: {},
-      completada: {},
+      completado: {},
       cancelada: {}
     };
 
@@ -192,7 +204,7 @@ function Produccion() {
     if (tab === activeTab) return;
     
     // Establecer la dirección de la transición basada en la posición de la pestaña
-    const tabOrder = ['pendiente', 'completada', 'cancelada'];
+    const tabOrder = ['pendiente', 'completado', 'cancelada'];
     const currentIndex = tabOrder.indexOf(activeTab);
     const nextIndex = tabOrder.indexOf(tab);
     
@@ -260,18 +272,39 @@ function Produccion() {
         console.warn('Error con RPC, usando consulta alternativa:', error.message);
         // Si hay error en la RPC, usar la consulta alternativa
         const datosAlternativos = await fetchPedidosAlternativos();
-        setPedidos(datosAlternativos);
+        
+        // Obtener información de tareas de producción
+        const tareasInfo = await obtenerTareasProduccion(datosAlternativos.map(p => p.venta_id));
+        
+        // Combinar los datos
+        const datosConTareas = datosAlternativos.map(pedido => ({
+          ...pedido,
+          total_tareas: tareasInfo[pedido.venta_id]?.total_tareas || 0,
+          tareas_completadas: tareasInfo[pedido.venta_id]?.tareas_completadas || 0
+        }));
+        
+        setPedidos(datosConTareas);
         
         // Agrupar pedidos por estado y cliente
-        const agrupados = agruparPedidosPorEstadoYCliente(datosAlternativos);
+        const agrupados = agruparPedidosPorEstadoYCliente(datosConTareas);
         setPedidosPorEstado(agrupados);
         return;
       }
       
-      setPedidos(data || []);
+      // Obtener información de tareas de producción
+      const tareasInfo = await obtenerTareasProduccion(data.map((p: Pedido) => p.venta_id));
+      
+      // Combinar los datos
+      const datosConTareas = (data || []).map((pedido: Pedido) => ({
+        ...pedido,
+        total_tareas: tareasInfo[pedido.venta_id]?.total_tareas || 0,
+        tareas_completadas: tareasInfo[pedido.venta_id]?.tareas_completadas || 0
+      }));
+      
+      setPedidos(datosConTareas);
       
       // Agrupar pedidos por estado y cliente
-      const agrupados = agruparPedidosPorEstadoYCliente(data || []);
+      const agrupados = agruparPedidosPorEstadoYCliente(datosConTareas);
       setPedidosPorEstado(agrupados);
     } catch (err: any) {
       setError(err.message || 'Error al cargar los pedidos');
@@ -280,6 +313,49 @@ function Produccion() {
       setIsLoading(false);
     }
   }, [fetchPedidosAlternativos, agruparPedidosPorEstadoYCliente]);
+
+  // Obtener las tareas de producción para las ventas
+  const obtenerTareasProduccion = async (ventaIds: number[]) => {
+    if (!ventaIds.length) return {};
+    
+    try {
+      // Consultar las tareas de producción para las ventas proporcionadas
+      const { data, error } = await supabase
+        .from('tareas_produccion')
+        .select('venta_id, estado')
+        .in('venta_id', ventaIds);
+      
+      if (error) throw error;
+      
+      // Procesar los resultados para obtener el total de tareas y completadas por cada venta
+      const resultado: { [ventaId: number]: { total_tareas: number, tareas_completadas: number } } = {};
+      
+      if (data) {
+        // Inicializar resultados para todas las ventas
+        ventaIds.forEach(id => {
+          resultado[id] = { total_tareas: 0, tareas_completadas: 0 };
+        });
+        
+        // Contar tareas por venta
+        data.forEach(tarea => {
+          if (!resultado[tarea.venta_id]) {
+            resultado[tarea.venta_id] = { total_tareas: 0, tareas_completadas: 0 };
+          }
+          
+          resultado[tarea.venta_id].total_tareas++;
+          
+          if (tarea.estado.toLowerCase() === 'completado') {
+            resultado[tarea.venta_id].tareas_completadas++;
+          }
+        });
+      }
+      
+      return resultado;
+    } catch (error) {
+      console.error('Error al obtener tareas de producción:', error);
+      return {};
+    }
+  };
 
   // Cargar pedidos al montar el componente
   useEffect(() => {
@@ -315,6 +391,28 @@ function Produccion() {
     const diferencia = entrega.getTime() - hoy.getTime();
     // Convertir a días
     return Math.ceil(diferencia / (1000 * 60 * 60 * 24));
+  };
+
+  // Función para obtener la fecha de entrega más cercana de un grupo de pedidos
+  const obtenerFechaEntregaMasCercana = (pedidos: Pedido[]): Date | null => {
+    const fechasEntrega = pedidos
+      .map(p => new Date(p.fecha_entrega))
+      .filter(date => !isNaN(date.getTime()));
+    return fechasEntrega.length > 0 ? 
+      new Date(Math.min(...fechasEntrega.map(date => date.getTime()))) : 
+      null;
+  };
+
+  // Función para ordenar pedidos por tiempo restante
+  const ordenarPedidosPorTiempoRestante = (a: Pedido[], b: Pedido[]): number => {
+    const fechaA = obtenerFechaEntregaMasCercana(a);
+    const fechaB = obtenerFechaEntregaMasCercana(b);
+    
+    if (!fechaA && !fechaB) return 0;
+    if (!fechaA) return 1;
+    if (!fechaB) return -1;
+    
+    return calcularDiasRestantes(fechaA) - calcularDiasRestantes(fechaB);
   };
 
   // Obtener estilo para días restantes
@@ -358,9 +456,11 @@ function Produccion() {
     switch (estado.toLowerCase()) {
       case 'pendiente':
         return { backgroundColor: '#FEF3C7', color: '#92400E' };
-      case 'completada':
+      case 'completado':
+      case 'completada':  // Añadimos este caso para manejar 'Completada'
         return { backgroundColor: '#D1FAE5', color: '#065F46' };
-      case 'cancelada':
+      case 'cancelado':
+      case 'cancelada':  // Añadimos este caso para manejar 'Cancelada'
         return { backgroundColor: '#FEE2E2', color: '#B91C1C' };
       default:
         return { backgroundColor: '#E5E7EB', color: '#374151' };
@@ -372,9 +472,11 @@ function Produccion() {
     switch (estado.toLowerCase()) {
       case 'pendiente':
         return <ClockIcon style={{ width: '16px', height: '16px' }} />;
-      case 'completada':
+      case 'completado':
+      case 'completada':  // Añadimos este caso para manejar 'Completada'
         return <CheckCircleIcon style={{ width: '16px', height: '16px' }} />;
-      case 'cancelada':
+      case 'cancelado':
+      case 'cancelada':  // Añadimos este caso para manejar 'Cancelada'
         return <XCircleIcon style={{ width: '16px', height: '16px' }} />;
       default:
         return null;
@@ -386,9 +488,11 @@ function Produccion() {
     switch (estado.toLowerCase()) {
       case 'pendiente':
         return 'Pendientes';
-      case 'completada':
+      case 'completado':
+      case 'completada':  // Añadimos este caso para manejar 'Completada'
         return 'Completados';
-      case 'cancelada':
+      case 'cancelado':
+      case 'cancelada':  // Añadimos este caso para manejar 'Cancelada'
         return 'Cancelados';
       default:
         return estado.charAt(0).toUpperCase() + estado.slice(1);
@@ -401,6 +505,78 @@ function Produccion() {
       ...prev,
       [clienteId]: !prev[clienteId]
     }));
+  }, []);
+
+  // Función para cancelar un pedido
+  const handleCancelPedido = useCallback(async (ventaId: number) => {
+    if (isCancelling) return;
+    
+    if (!confirm('¿Estás seguro de que deseas cancelar este pedido? Esta acción no se puede deshacer.')) {
+      return;
+    }
+    
+    setIsCancelling(true);
+    try {
+      // 1. Actualizar el estado del pedido en la tabla ventas
+      const { error: updateError } = await supabase
+        .from('ventas')
+        .update({ estado: 'Cancelada' })
+        .eq('id', ventaId);
+      
+      if (updateError) throw updateError;
+      
+      // 2. Eliminar las tareas de producción asociadas a la venta
+      const { error: deleteError } = await supabase
+        .from('tareas_produccion')
+        .delete()
+        .eq('venta_id', ventaId);
+      
+      if (deleteError) throw deleteError;
+      
+      // 3. Actualizar la UI
+      await fetchPedidos();
+      
+      // Mostrar confirmación
+      alert('Pedido cancelado correctamente');
+    } catch (err: any) {
+      console.error('Error al cancelar el pedido:', err);
+      alert(`Error al cancelar el pedido: ${err.message || 'Se ha producido un error'}`);
+    } finally {
+      setIsCancelling(false);
+    }
+  }, [isCancelling, fetchPedidos]);
+
+  // Función para generar factura electrónica
+  const handleGenerateInvoice = useCallback(async (pedido: Pedido) => {
+    if (isGeneratingInvoice) return;
+    
+    setIsGeneratingInvoice(true);
+    try {
+      // Encontrar todos los pedidos del mismo cliente
+      const pedidosCliente = pedidos.filter(p => p.cliente_nombre === pedido.cliente_nombre);
+      
+      // Generar la factura en formato PDF
+      const invoiceResult = generateInvoicePDF(pedidosCliente);
+      
+      // Mostrar la vista previa de la factura
+      setInvoicePreview(invoiceResult);
+      
+      console.log('Generando factura para cliente:', pedido.cliente_nombre);
+      console.log('Pedidos incluidos:', pedidosCliente.map(p => p.venta_id));
+      
+      // Calcular el total para el mensaje
+      const totalFactura = pedidosCliente.reduce((sum, p) => sum + p.precio_venta, 0);
+    } catch (err: any) {
+      console.error('Error al generar la factura:', err);
+      alert(`Error al generar la factura: ${err.message || 'Se ha producido un error'}`);
+    } finally {
+      setIsGeneratingInvoice(false);
+    }
+  }, [isGeneratingInvoice, pedidos]);
+
+  // Función para cerrar el modal de vista previa de factura
+  const closeInvoicePreview = useCallback(() => {
+    setInvoicePreview(null);
   }, []);
 
   return (
@@ -435,6 +611,15 @@ function Produccion() {
             initialData={null} 
           />
         </div>
+      )}
+      
+      {/* Modal de vista previa de factura */}
+      {invoicePreview && (
+        <InvoicePreviewModal
+          onClose={closeInvoicePreview}
+          pdfDocument={invoicePreview.document}
+          invoiceNumber={invoicePreview.invoiceNumber}
+        />
       )}
       
       {/* Barra de búsqueda */}
@@ -480,13 +665,13 @@ function Produccion() {
         marginBottom: '20px',
         paddingBottom: '2px'
       }}>
-        {(['pendiente', 'completada', 'cancelada'] as FilterTab[]).map((tab) => {
+        {(['pendiente', 'completado', 'cancelada'] as const).map((tab) => {
           const totalPedidos = getTotalPedidosPorEstado(tab);
           const totalClientes = getTotalClientesPorEstado(tab);
           return (
             <button 
               key={tab}
-              onClick={() => handleTabChange(tab)}
+              onClick={() => handleTabChange(tab as FilterTab)}
               style={{
                 padding: '10px 16px',
                 fontSize: '14px',
@@ -611,313 +796,18 @@ function Produccion() {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                {Object.entries(pedidosPorEstado[activeTab] || {}).map(([clienteNombre, pedidosCliente]) => {
-                  // Determinar la fecha de entrega más cercana y el estado general
-                  const fechasEntrega = pedidosCliente.map(p => new Date(p.fecha_entrega));
-                  const fechaEntregaMasCercana = fechasEntrega.length > 0 ? 
-                    new Date(Math.min(...fechasEntrega.filter(date => !isNaN(date.getTime())).map(date => date.getTime()))) : 
-                    null;
-                  
-                  // Calcular el precio total de todos los pedidos del cliente
-                  const precioTotal = pedidosCliente.reduce((total, pedido) => {
-                    return total + pedido.precio_venta;
-                  }, 0);
-                  
-                  // Determinar el estado general (pendiente tiene prioridad, luego completada, luego cancelada)
-                  let estadoGeneral = '';
-                  if (pedidosCliente.some(p => p.estado.toLowerCase() === 'pendiente')) {
-                    estadoGeneral = 'pendiente';
-                  } else if (pedidosCliente.some(p => p.estado.toLowerCase() === 'completada')) {
-                    estadoGeneral = 'completada';
-                  } else if (pedidosCliente.some(p => p.estado.toLowerCase() === 'cancelada')) {
-                    estadoGeneral = 'cancelada';
-                  } else {
-                    estadoGeneral = pedidosCliente[0]?.estado.toLowerCase() || '';
-                  }
-                  
-                  const isExpanded = expandedCards[clienteNombre] || false;
-                  
-                  return (
-                    <div 
-                      key={clienteNombre} 
-                      className="inventory-item-wrapper"
-                      style={{ 
-                        border: '1px solid #E5E7EB', 
-                        borderRadius: '8px', 
-                        overflow: 'hidden', 
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                        backgroundColor: 'white',
-                        transition: 'all 0.2s',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.05)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
-                      }}
-                    >
-                      {/* Header siempre visible con información resumida */}
-                      <div 
-                        style={{ 
-                          padding: '12px', 
-                          display: 'flex', 
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          cursor: 'pointer',
-                          backgroundColor: '#F9FAFB',
-                          borderBottom: isExpanded ? '1px solid #E5E7EB' : 'none'
-                        }}
-                        onClick={() => toggleCardExpansion(clienteNombre)}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
-                          {/* Icono de expansión */}
-                          <div style={{ color: '#6B7280' }}>
-                            {isExpanded ? 
-                              <ChevronDownIcon style={{ width: '16px', height: '16px' }} /> : 
-                              <ChevronRightIcon style={{ width: '16px', height: '16px' }} />
-                            }
-                          </div>
-                          
-                          {/* Información básica del cliente */}
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: '16px', fontWeight: 600, color: '#1F2937' }}>
-                              {clienteNombre}
-                            </div>
-                            <div style={{ fontSize: '14px', color: '#6B7280', display: 'flex', gap: '8px', marginTop: '2px' }}>
-                              <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                <span style={{ backgroundColor: '#E5E7EB', padding: '1px 6px', borderRadius: '10px', color: '#374151', fontSize: '12px' }}>
-                                  {pedidosCliente.length} pedido{pedidosCliente.length !== 1 ? 's' : ''}
-                                </span>
-                              </span>
-                              
-                              {/* Precio total */}
-                              <span style={{ 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                gap: '3px',
-                                backgroundColor: '#F0FDF4',
-                                padding: '1px 6px',
-                                borderRadius: '10px',
-                                color: '#166534',
-                                fontSize: '12px',
-                                fontWeight: 500
-                              }}>
-                                <CurrencyDollarIcon style={{ width: '13px', height: '13px' }} />
-                                ${precioTotal % 1 === 0 ? Math.floor(precioTotal) : precioTotal.toFixed(2).replace(/\.00$/, '')}
-                              </span>
-                              
-                              {fechaEntregaMasCercana && (
-                                <>
-                                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                    <CalendarIcon style={{ width: '13px', height: '13px' }} />
-                                    {formatDate(fechaEntregaMasCercana.toISOString())}
-                                  </span>
-                                  
-                                  {/* Días restantes para entrega */}
-                                  {(() => {
-                                    const diasRestantes = calcularDiasRestantes(fechaEntregaMasCercana);
-                                    return (
-                                      <span style={{ 
-                                        display: 'flex', 
-                                        alignItems: 'center', 
-                                        gap: '3px',
-                                        ...getEstiloDiasRestantes(diasRestantes),
-                                        padding: '1px 6px',
-                                        borderRadius: '10px',
-                                        fontSize: '12px',
-                                        fontWeight: 500
-                                      }}>
-                                        <ClockIcon style={{ width: '12px', height: '12px' }} />
-                                        {getTextoDiasRestantes(diasRestantes)}
-                                      </span>
-                                    );
-                                  })()}
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          
-                          {/* Estado general */}
-                          <div style={{ 
-                            ...getEstadoStyle(estadoGeneral), 
-                            padding: '2px 8px', 
-                            borderRadius: '10px', 
-                            fontSize: '12px',
-                            fontWeight: 500,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '3px',
-                            marginLeft: 'auto'
-                          }}>
-                            {getEstadoIcon(estadoGeneral)}
-                            {estadoGeneral.charAt(0).toUpperCase() + estadoGeneral.slice(1)}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* Contenido expandible */}
-                      {isExpanded && (
-                        <div style={{ display: 'flex', flexDirection: 'row' }}>
-                          {/* Información del cliente - lado izquierdo */}
-                          <div style={{ 
-                            backgroundColor: '#F9FAFB', 
-                            padding: '12px', 
-                            borderRight: '1px solid #E5E7EB',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '2px',
-                            minWidth: '200px',
-                            width: '22%'
-                          }}>
-                            {pedidosCliente[0].cliente_telefono && (
-                              <div style={{ 
-                                fontSize: '12px', 
-                                color: '#6B7280',
-                                display: 'flex',
-                                alignItems: 'center', 
-                                gap: '4px'
-                              }}>
-                                📞 {pedidosCliente[0].cliente_telefono}
-                              </div>
-                            )}
-                            {pedidosCliente[0].cliente_email && (
-                              <div style={{ 
-                                fontSize: '12px', 
-                                color: '#6B7280',
-                                display: 'flex',
-                                alignItems: 'center', 
-                                gap: '4px',
-                                textOverflow: 'ellipsis',
-                                overflow: 'hidden',
-                                whiteSpace: 'nowrap'
-                              }}>
-                                ✉️ {pedidosCliente[0].cliente_email}
-                              </div>
-                            )}
-                            {pedidosCliente[0].cliente_direccion && (
-                              <div style={{ 
-                                fontSize: '12px', 
-                                color: '#6B7280',
-                                marginTop: '4px'
-                              }}>
-                                📍 {pedidosCliente[0].cliente_direccion}
-                              </div>
-                            )}
-                            {pedidosCliente[0].cliente_ciudad && (
-                              <div style={{ 
-                                fontSize: '12px', 
-                                color: '#6B7280'
-                              }}>
-                                {pedidosCliente[0].cliente_ciudad}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Lista de pedidos - lado derecho */}
-                          <div style={{ padding: '10px', flexGrow: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            {pedidosCliente.map((pedido) => (
-                              <div 
-                                key={pedido.venta_id} 
-                                style={{ 
-                                  border: '1px solid #E5E7EB',
-                                  borderRadius: '6px',
-                                  padding: '8px',
-                                  transition: 'all 0.2s',
-                                  backgroundColor: '#FFFFFF',
-                                  fontSize: '12px'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor = '#F9FAFB';
-                                  e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor = '#FFFFFF';
-                                  e.currentTarget.style.boxShadow = 'none';
-                                }}
-                              >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'center' }}>
-                                  <div style={{ 
-                                    fontWeight: 600, 
-                                    fontSize: '13px', 
-                                    color: '#111827',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                  }}>
-                                    <ShoppingBagIcon style={{ width: '14px', height: '14px' }} />
-                                    {pedido.producto_nombre}
-                                  </div>
-                                  <div style={{ 
-                                    ...getEstadoStyle(pedido.estado), 
-                                    padding: '1px 6px', 
-                                    borderRadius: '10px', 
-                                    fontSize: '11px',
-                                    fontWeight: 500,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '3px'
-                                  }}>
-                                    {getEstadoIcon(pedido.estado)}
-                                    {pedido.estado}
-                                  </div>
-                                </div>
-                                
-                                <div style={{ 
-                                  display: 'grid', 
-                                  gridTemplateColumns: '1fr 1fr', 
-                                  gap: '6px',
-                                  fontSize: '11px',
-                                  color: '#6B7280',
-                                  marginBottom: '6px'
-                                }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                    <CalendarIcon style={{ width: '12px', height: '12px' }} />
-                                    <span>Venta: {formatDate(pedido.fecha_venta)}</span>
-                                  </div>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                    <CalendarIcon style={{ width: '12px', height: '12px' }} />
-                                    <span>Entrega: {formatDate(pedido.fecha_entrega)}</span>
-                                  </div>
-                                </div>
-                                
-                                <div style={{ 
-                                  display: 'flex', 
-                                  justifyContent: 'space-between',
-                                  alignItems: 'center',
-                                  borderTop: '1px solid #F3F4F6',
-                                  paddingTop: '6px',
-                                  marginTop: '3px'
-                                }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                    <span style={{ 
-                                      backgroundColor: '#F3F4F6', 
-                                      padding: '1px 4px', 
-                                      borderRadius: '4px',
-                                      fontSize: '11px'
-                                    }}>
-                                      x{pedido.cantidad}
-                                    </span>
-                                  </div>
-                                  <div style={{ 
-                                    fontWeight: 600, 
-                                    color: '#111827',
-                                    fontSize: '13px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '3px'
-                                  }}>
-                                    <CurrencyDollarIcon style={{ width: '12px', height: '12px' }} />
-                                    ${pedido.precio_venta % 1 === 0 ? Math.floor(pedido.precio_venta) : pedido.precio_venta.toFixed(2).replace(/\.00$/, '')}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                {Object.entries(pedidosPorEstado[activeTab] || {})
+                  .map(([clienteNombre, pedidosCliente]) => (
+                    <PedidoCard
+                      key={clienteNombre}
+                      clienteNombre={clienteNombre}
+                      pedidosCliente={pedidosCliente}
+                      isExpanded={expandedCards[clienteNombre] || false}
+                      onToggleExpand={toggleCardExpansion}
+                      onCancelPedido={handleCancelPedido}
+                      onGenerateInvoice={handleGenerateInvoice}
+                    />
+                  ))}
                 {/* Espacio adicional para permitir scroll completo */}
                 <div style={{ height: '100px' }}></div>
               </div>

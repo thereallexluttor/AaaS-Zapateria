@@ -168,10 +168,9 @@ interface EstadoVentas {
   color: string;
 }
 
-interface TallaColorVentas {
+interface TallaVentas {
   talla: string;
-  coloresCantidad: {[color: string]: number};
-  total: number;
+  cantidad: number;
 }
 
 interface ColorVentas {
@@ -195,7 +194,7 @@ function VentasHistorial({ onClose, isClosing, productoId, productoNombre }: Ven
   const [tipoGrafica, setTipoGrafica] = useState<TipoGrafica>('tendencia');
   const [ventasPorPeriodo, setVentasPorPeriodo] = useState<VentaPorPeriodo[]>([]);
   const [ventasPorEstado, setVentasPorEstado] = useState<EstadoVentas[]>([]);
-  const [ventasPorTalla, setVentasPorTalla] = useState<TallaColorVentas[]>([]);
+  const [ventasPorTalla, setVentasPorTalla] = useState<TallaVentas[]>([]);
   const [ventasPorColor, setVentasPorColor] = useState<ColorVentas[]>([]);
 
   useEffect(() => {
@@ -350,8 +349,8 @@ function VentasHistorial({ onClose, isClosing, productoId, productoNombre }: Ven
     
     setVentasPorEstado(estadosFinal);
     
-    // 3. Calcular ventas por talla y color
-    const tallasPorColor = new Map<string, TallaColorVentas>();
+    // 3. Calcular ventas por talla
+    const tallas = new Map<string, number>();
     
     ventasOrdenadas.forEach(venta => {
       if (venta.tallas) {
@@ -360,29 +359,10 @@ function VentasHistorial({ onClose, isClosing, productoId, productoNombre }: Ven
         
         tallasSeparadas.forEach(talla => {
           if (talla) {
-            if (!tallasPorColor.has(talla)) {
-              tallasPorColor.set(talla, {
-                talla,
-                coloresCantidad: {},
-                total: 0
-              });
-            }
-            
-            const tallaActual = tallasPorColor.get(talla)!;
-            tallaActual.total += venta.cantidad;
-            
-            // Procesar colores para esta talla
-            if (venta.colores) {
-              const coloresSeparados = venta.colores.split(',').map(c => c.trim().toLowerCase());
-              
-              coloresSeparados.forEach(color => {
-                if (color) {
-                  tallaActual.coloresCantidad[color] = (tallaActual.coloresCantidad[color] || 0) + venta.cantidad;
-                }
-              });
+            if (tallas.has(talla)) {
+              tallas.set(talla, tallas.get(talla)! + venta.cantidad);
             } else {
-              // Si no hay color, lo marcamos como "Sin especificar"
-              tallaActual.coloresCantidad["Sin especificar"] = (tallaActual.coloresCantidad["Sin especificar"] || 0) + venta.cantidad;
+              tallas.set(talla, venta.cantidad);
             }
           }
         });
@@ -390,7 +370,8 @@ function VentasHistorial({ onClose, isClosing, productoId, productoNombre }: Ven
     });
     
     // Convertir el Map a un array y ordenar por talla numéricamente
-    const tallasFinal = Array.from(tallasPorColor.values())
+    const tallasFinal = Array.from(tallas.entries())
+      .map(([talla, cantidad]) => ({ talla, cantidad }))
       .sort((a, b) => {
         const numA = parseFloat(a.talla);
         const numB = parseFloat(b.talla);
@@ -563,62 +544,37 @@ function VentasHistorial({ onClose, isClosing, productoId, productoNombre }: Ven
     ],
   };
 
-  // Nueva configuración para gráfica de tallas con subdivisiones por color
+  // Nueva configuración para gráfica de tallas
   const configuracionGraficaTallas = {
     labels: ventasPorTalla.map(item => `Talla ${item.talla}`),
-    datasets: obtenerDatasetsColoresPorTalla(),
-  };
-  
-  // Función para obtener los datasets de colores por talla
-  function obtenerDatasetsColoresPorTalla() {
-    // Primero, obtenemos todos los colores únicos que aparecen en las ventas
-    const coloresUnicos = new Set<string>();
-    ventasPorTalla.forEach(talla => {
-      Object.keys(talla.coloresCantidad).forEach(color => {
-        coloresUnicos.add(color);
-      });
-    });
-    
-    // Convertimos a array y ordenamos (opcional)
-    const coloresOrdenados = Array.from(coloresUnicos).sort();
-    
-    // Paleta de colores para representar los colores en la gráfica
-    const coloresPaleta = [
-      '#FF6384', // Rosa
-      '#36A2EB', // Azul
-      '#FFCE56', // Amarillo
-      '#4BC0C0', // Turquesa
-      '#9966FF', // Morado
-      '#FF9F40', // Naranja
-      '#C9CBCF', // Gris
-      '#7ED957', // Verde claro
-      '#8A2BE2', // Violeta
-      '#FF6347', // Tomate
-      '#00BFFF', // Azul cielo
-      '#32CD32', // Lima
-      '#FF69B4', // Rosa fuerte
-      '#1E90FF', // Azul dodger
-      '#FFD700', // Dorado
-      '#20B2AA', // Verde mar
-      '#FF4500', // Rojo naranja
-      '#BA55D3', // Orquídea
-      '#00FA9A', // Verde primavera
-      '#FF00FF', // Magenta
-    ];
-    
-    // Creamos un dataset para cada color
-    return coloresOrdenados.map((color, index) => {
-      return {
-        label: color.charAt(0).toUpperCase() + color.slice(1),
-        data: ventasPorTalla.map(talla => talla.coloresCantidad[color] || 0),
-        backgroundColor: coloresPaleta[index % coloresPaleta.length],
-        borderColor: '#FFFFFF',
+    datasets: [
+      {
+        label: 'Unidades vendidas',
+        data: ventasPorTalla.map(item => item.cantidad),
+        backgroundColor: ventasPorTalla.map((_, index) => {
+          // Generar una paleta de colores para las tallas
+          const coloresTallas = [
+            '#4F46E5', // Indigo
+            '#7C3AED', // Violeta
+            '#8B5CF6', // Púrpura
+            '#A78BFA', // Lavanda
+            '#C4B5FD', // Lila
+            '#818CF8', // Azul violeta
+            '#6366F1', // Azul lavanda
+            '#4F46E5', // Índigo
+            '#4338CA', // Índigo oscuro
+            '#3730A3', // Azul muy oscuro
+            '#312E81', // Azul profundo
+          ];
+          return coloresTallas[index % coloresTallas.length];
+        }),
+        borderColor: '#4F46E5',
         borderWidth: 1,
         borderRadius: 6,
-        stack: 'Stack 0', // Todas las barras comparten el mismo stack para apilarse
-      };
-    });
-  }
+        maxBarThickness: 30,
+      }
+    ],
+  };
 
   // Nueva configuración para gráfica de colores
   const configuracionGraficaColores = {
@@ -627,34 +583,27 @@ function VentasHistorial({ onClose, isClosing, productoId, productoNombre }: Ven
       {
         label: 'Unidades por color',
         data: ventasPorColor.map(item => item.cantidad),
-        backgroundColor: ventasPorColor.map((_, index) => {
-          // Paleta de colores vibrantes para la gráfica
-          const coloresPaleta = [
-            '#FF6384', // Rosa
-            '#36A2EB', // Azul
-            '#FFCE56', // Amarillo
-            '#4BC0C0', // Turquesa
-            '#9966FF', // Morado
-            '#FF9F40', // Naranja
-            '#C9CBCF', // Gris
-            '#7ED957', // Verde claro
-            '#8A2BE2', // Violeta
-            '#FF6347', // Tomate
-            '#00BFFF', // Azul cielo
-            '#32CD32', // Lima
-            '#FF69B4', // Rosa fuerte
-            '#1E90FF', // Azul dodger
-            '#FFD700', // Dorado
-            '#20B2AA', // Verde mar
-            '#FF4500', // Rojo naranja
-            '#BA55D3', // Orquídea
-            '#00FA9A', // Verde primavera
-            '#FF00FF', // Magenta
-          ];
+        backgroundColor: ventasPorColor.map(item => {
+          // Verificar que el color sea válido y visible
+          const colorHex = item.colorHex || '#CCCCCC';
+          // Hacer transparentes los colores para mejor visualización
+          if (colorHex === '#FFFFFF') return 'rgba(255, 255, 255, 0.9)'; // Blanco con transparencia
           
-          return coloresPaleta[index % coloresPaleta.length];
+          // Convertir hex a rgba con algo de transparencia para mejor visualización
+          const r = parseInt(colorHex.slice(1, 3), 16);
+          const g = parseInt(colorHex.slice(3, 5), 16);
+          const b = parseInt(colorHex.slice(5, 7), 16);
+          return `rgba(${r}, ${g}, ${b}, 0.8)`;
         }),
-        borderColor: 'white', // Borde blanco para todos
+        borderColor: ventasPorColor.map(item => {
+          const colorHex = item.colorHex || '#CCCCCC';
+          // Borde oscuro para colores claros, claro para colores oscuros
+          if (['#FFFFFF', '#F5F5DC', '#FFFF00', '#FFC0CB', '#C0C0C0'].includes(colorHex)) {
+            return '#666666';
+          } else {
+            return '#FFFFFF';
+          }
+        }),
         borderWidth: 2,
         hoverOffset: 15,
       }
@@ -826,15 +775,7 @@ function VentasHistorial({ onClose, isClosing, productoId, productoNombre }: Ven
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        display: true, // Ahora sí necesitamos leyenda para mostrar los colores
-        position: 'right' as const,
-        labels: {
-          usePointStyle: true,
-          boxWidth: 8,
-          font: {
-            size: 10,
-          },
-        },
+        display: false, // No necesitamos leyenda para tallas
       },
       tooltip: {
         backgroundColor: 'rgba(255, 255, 255, 0.9)',
@@ -847,14 +788,7 @@ function VentasHistorial({ onClose, isClosing, productoId, productoNombre }: Ven
         boxPadding: 4,
         callbacks: {
           label: function(context: any) {
-            const colorLabel = context.dataset.label;
-            return `${colorLabel}: ${context.parsed.x} unidades`;
-          },
-          footer: function(tooltipItems: any) {
-            // Calcular el total para esta talla
-            const tallaIndex = tooltipItems[0].dataIndex;
-            const talla = ventasPorTalla[tallaIndex];
-            return `Total: ${talla.total} unidades`;
+            return `${context.parsed.x} unidades`;
           }
         }
       },
@@ -862,7 +796,6 @@ function VentasHistorial({ onClose, isClosing, productoId, productoNombre }: Ven
     scales: {
       x: {
         beginAtZero: true,
-        stacked: true, // Hace que las barras se apilen
         grid: {
           color: 'rgba(243, 244, 246, 1)',
           drawBorder: false,
@@ -875,7 +808,6 @@ function VentasHistorial({ onClose, isClosing, productoId, productoNombre }: Ven
         },
       },
       y: {
-        stacked: true, // Hace que las barras se apilen
         grid: {
           display: false,
           drawBorder: false,
@@ -891,7 +823,7 @@ function VentasHistorial({ onClose, isClosing, productoId, productoNombre }: Ven
     },
     elements: {
       bar: {
-        borderWidth: 1,
+        borderWidth: 2,
         borderRadius: 4,
       }
     },
@@ -1339,6 +1271,46 @@ function VentasHistorial({ onClose, isClosing, productoId, productoNombre }: Ven
             </table>
           </div>
         )}
+
+        {/* Botón para imprimir reporte si hay ventas */}
+        {!loading && !error && ventas.length > 0 && (
+          <div style={{ 
+            display: 'flex',
+            justifyContent: 'flex-end',
+            marginTop: '24px' 
+          }}>
+            <button
+              style={{
+                backgroundColor: '#F3F4F6',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                color: '#4B5563',
+                fontSize: '14px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onClick={() => {
+                window.print();
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#E5E7EB';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#F3F4F6';
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M5 1a2 2 0 0 0-2 2v1h10V3a2 2 0 0 0-2-2H5zm6 8H5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1z"/>
+                <path d="M0 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1v-2a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2H2a2 2 0 0 1-2-2V7zm2.5 1a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/>
+              </svg>
+              Imprimir reporte
+            </button>
+          </div>
+        )}
       </div>
     </>
   );
@@ -1355,6 +1327,31 @@ animationStyle.innerHTML = `
     to {
       opacity: 1;
       transform: scale(1);
+    }
+  }
+
+  /* Estilos para impresión */
+  @media print {
+    body * {
+      visibility: hidden;
+    }
+    .ventas-historial-container, .ventas-historial-container * {
+      visibility: visible;
+    }
+    .ventas-historial-container {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: auto;
+      padding: 15px;
+      margin: 0;
+      max-width: 100%;
+      box-shadow: none;
+      border-radius: 0;
+    }
+    button {
+      display: none !important;
     }
   }
 

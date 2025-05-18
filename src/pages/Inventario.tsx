@@ -46,6 +46,30 @@ function Inventario() {
     refreshAllData 
   } = useInventario();
   
+  // Añadir controlador para cerrar menús desplegables cuando se hace clic fuera
+  useEffect(() => {
+    const handleDocumentClick = (event: MouseEvent) => {
+      // Si el clic no fue dentro de un dropdown o un botón de dropdown
+      if (
+        !(event.target as HTMLElement).closest('.dropdown-content') && 
+        !(event.target as HTMLElement).closest('.dropdown button')
+      ) {
+        // Cerrar todos los dropdowns abiertos
+        document.querySelectorAll('.dropdown-content.show').forEach(el => {
+          el.classList.remove('show');
+        });
+      }
+    };
+
+    // Añadir el event listener
+    document.addEventListener('click', handleDocumentClick);
+
+    // Limpieza al desmontar
+    return () => {
+      document.removeEventListener('click', handleDocumentClick);
+    };
+  }, []);
+  
   // Manejar la búsqueda con debounce y evitar búsquedas duplicadas
   useEffect(() => {
     // Solo realizar búsquedas cuando se ha inicializado el inventario
@@ -143,6 +167,15 @@ function Inventario() {
       setSelectedItem(item);
       setIsEditMode(true);
       setActiveModal('producto');
+    }
+  }, []);
+
+  // Nueva función para editar herramientas
+  const handleEditHerramienta = useCallback((item: InventoryItemType) => {
+    if (item.type === 'herramienta') {
+      setSelectedItem(item);
+      setIsEditMode(true);
+      setActiveModal('herramienta');
     }
   }, []);
 
@@ -427,7 +460,9 @@ function Inventario() {
                       ? handleEditMaterial 
                       : item.type === 'producto' 
                         ? handleEditProducto 
-                        : undefined
+                        : item.type === 'herramienta'
+                          ? handleEditHerramienta
+                          : undefined
                   }
                   onOrder={item.type === 'material' ? handleOrderMaterial : undefined}
                   onViewOrders={item.type === 'material' ? handleViewMaterialOrders : undefined}
@@ -517,6 +552,7 @@ function Inventario() {
             <HerramientaFormComponent 
               onClose={closeModal}
               isClosing={isClosing}
+              {...(isEditMode ? { isEditMode, herramientaToEdit: selectedItem } : {})}
             />
           )}
 
@@ -819,6 +855,23 @@ animationStyle.innerHTML = `
     to {
       transform: rotate(360deg);
     }
+  }
+  
+  /* Estilos para el menú desplegable en las tarjetas */
+  .dropdown-content.show {
+    display: block !important;
+  }
+  
+  .dropdown-content a:hover {
+    background-color: #F3F4F6;
+  }
+  
+  .dropdown-content a:first-child {
+    border-radius: 6px 6px 0 0;
+  }
+  
+  .dropdown-content a:last-child {
+    border-radius: 0 0 6px 6px;
   }
   
   /* Importar fuente Poppins */

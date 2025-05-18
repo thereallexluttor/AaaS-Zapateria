@@ -2,11 +2,13 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { PlusCircleIcon, ArrowDownTrayIcon, PrinterIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import TrabajadorFormComponent from '../components/TrabajadorForm';
 import TrabajadorItem, { TrabajadorItemType } from '../components/TrabajadorItem';
+import TrabajadorDashboard from '../components/TrabajadorDashboard';
+import TrabajadorDetalle from '../components/TrabajadorDetalle';
 import { useTrabajadores } from '../lib/hooks';
 
 // Tipos de pestañas para filtrar trabajadores
 type FilterTab = 'produccion' | 'administrativo';
-type ModalType = 'trabajador' | null;
+type ModalType = 'trabajador' | 'dashboard' | 'detalle' | null;
 
 function Trabajadores() {
   const [activeModal, setActiveModal] = useState<ModalType>(null);
@@ -290,10 +292,18 @@ function Trabajadores() {
     }, 300);
   }, [getTrabajadores, searchTerm]);
   
+  // Manejador para ver detalles del trabajador
   const handleViewDetails = useCallback((trabajador: TrabajadorItemType) => {
     setSelectedTrabajador(trabajador);
-    // Aquí se puede implementar la lógica para mostrar detalles
-    console.log('Ver detalles de:', trabajador);
+    console.log('Mostrando detalles de trabajador:', trabajador.id, trabajador.nombre, trabajador.apellido);
+    setActiveModal('detalle');
+  }, []);
+  
+  // Manejador para ver el dashboard de desempeño del trabajador
+  const handleViewDashboard = useCallback((trabajador: TrabajadorItemType) => {
+    setSelectedTrabajador(trabajador);
+    console.log('Abriendo dashboard para trabajador:', trabajador.id, trabajador.nombre, trabajador.apellido);
+    setActiveModal('dashboard');
   }, []);
   
   // Filtrar trabajadores según la pestaña activa
@@ -629,6 +639,7 @@ function Trabajadores() {
                     isSelected={selectedTrabajadores.has(trabajador.id)}
                     onSelectChange={handleSelectTrabajador}
                     onViewDetails={handleViewDetails}
+                    onViewDashboard={handleViewDashboard}
                   />
                 </div>
               ))}
@@ -744,6 +755,59 @@ function Trabajadores() {
           <TrabajadorFormComponent
             onClose={closeModal}
             onSave={addTrabajador}
+            isClosing={isClosing}
+          />
+        </div>
+      )}
+      
+      {/* Modal de dashboard de desempeño */}
+      {activeModal === 'dashboard' && selectedTrabajador && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10000,
+            opacity: isClosing ? 0 : 1,
+            transition: 'opacity 0.3s ease-in-out',
+          }}
+        >
+          <TrabajadorDashboard
+            trabajadorId={selectedTrabajador.id}
+            nombreCompleto={`${selectedTrabajador.nombre} ${selectedTrabajador.apellido}`}
+            onClose={closeModal}
+            isClosing={isClosing}
+          />
+        </div>
+      )}
+      
+      {/* Modal de detalles del trabajador */}
+      {activeModal === 'detalle' && selectedTrabajador && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10000,
+            opacity: isClosing ? 0 : 1,
+            transition: 'opacity 0.3s ease-in-out',
+          }}
+        >
+          <TrabajadorDetalle
+            trabajador={selectedTrabajador}
+            onClose={closeModal}
             isClosing={isClosing}
           />
         </div>

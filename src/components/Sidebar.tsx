@@ -210,12 +210,6 @@ function Sidebar({ onItemClick, activePage = 'home' }: SidebarProps) {
       iconSrc: '/icons/AI.svg',
       iconAlt: 'Equipment icon',
       label: 'AI Team'
-    },
-    {
-      id: 'settings',
-      iconSrc: '/icons/Settings.svg',
-      iconAlt: 'Settings icon',
-      label: 'Ajustes'
     }
   ];
 

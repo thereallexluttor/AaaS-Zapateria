@@ -25,13 +25,15 @@ interface TrabajadorItemProps {
   isSelected: boolean;
   onSelectChange: (id: string, isSelected: boolean) => void;
   onViewDetails?: (trabajador: TrabajadorItemType) => void;
+  onViewDashboard?: (trabajador: TrabajadorItemType) => void;
 }
 
 function TrabajadorItem({ 
   trabajador, 
   isSelected, 
   onSelectChange, 
-  onViewDetails 
+  onViewDetails,
+  onViewDashboard
 }: TrabajadorItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   
@@ -102,6 +104,14 @@ function TrabajadorItem({
   // Handler specifically for checkbox change
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onSelectChange(trabajador.id, e.target.checked);
+  };
+
+  // Manejador para el botón de dashboard
+  const handleViewDashboard = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onViewDashboard) {
+      onViewDashboard(trabajador);
+    }
   };
   
   return (
@@ -248,112 +258,104 @@ function TrabajadorItem({
         borderTop: isExpanded ? '1px solid #E5E7EB' : 'none',
         paddingTop: isExpanded ? '16px' : '0',
       }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '16px',
-          fontSize: '14px',
-          color: '#374151'
-        }}>
-          {/* Información de contacto */}
-          <div>
-            <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: '#111827' }}>
-              Información de Contacto
-            </h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {trabajador.correo && (
-                <div>
-                  <span style={{ color: '#6B7280' }}>Correo:</span>
-                  <div>{trabajador.correo}</div>
-                </div>
-              )}
-              {trabajador.telefono && (
-                <div>
-                  <span style={{ color: '#6B7280' }}>Teléfono:</span>
-                  <div>{trabajador.telefono}</div>
-                </div>
-              )}
-              {trabajador.direccion && (
-                <div>
-                  <span style={{ color: '#6B7280' }}>Dirección:</span>
-                  <div>{trabajador.direccion}</div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Información laboral */}
-          <div>
-            <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: '#111827' }}>
-              Información Laboral
-            </h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {trabajador.fecha_contratacion && (
-                <div>
-                  <span style={{ color: '#6B7280' }}>Fecha de Contratación:</span>
-                  <div>
-                    {new Date(trabajador.fecha_contratacion).toLocaleDateString('es-ES', {
-                      day: '2-digit',
-                      month: 'long',
-                      year: 'numeric'
-                    })}
-                  </div>
-                </div>
-              )}
-              {trabajador.tipo_contrato && (
-                <div>
-                  <span style={{ color: '#6B7280' }}>Tipo de Contrato:</span>
-                  <div>{trabajador.tipo_contrato}</div>
-                </div>
-              )}
-              {trabajador.horas_trabajo && (
-                <div>
-                  <span style={{ color: '#6B7280' }}>Horas de Trabajo:</span>
-                  <div>{trabajador.horas_trabajo} horas</div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Información adicional */}
-          <div>
-            <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: '#111827' }}>
-              Información Adicional
-            </h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {trabajador.especialidad && (
-                <div>
-                  <span style={{ color: '#6B7280' }}>Especialidad:</span>
-                  <div>{trabajador.especialidad}</div>
-                </div>
-              )}
-              {trabajador.fecha_nacimiento && (
-                <div>
-                  <span style={{ color: '#6B7280' }}>Fecha de Nacimiento:</span>
-                  <div>
-                    {new Date(trabajador.fecha_nacimiento).toLocaleDateString('es-ES', {
-                      day: '2-digit',
-                      month: 'long',
-                      year: 'numeric'
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* En lugar de botones de acción, solo mostramos una indicación de cómo cerrar */}
         <div style={{ 
-          display: 'flex',
-          justifyContent: 'center',
-          marginTop: '16px',
-          paddingTop: '12px',
-          borderTop: '1px solid #E5E7EB',
-          color: '#6B7280',
-          fontSize: '13px'
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+          gap: '12px 20px',
+          marginBottom: '16px'
         }}>
-          Haz clic en la tarjeta para cerrar
+          {trabajador.correo && (
+            <DetailItem label="Correo" value={trabajador.correo} />
+          )}
+          {trabajador.telefono && (
+            <DetailItem label="Teléfono" value={trabajador.telefono} />
+          )}
+          {trabajador.especialidad && (
+            <DetailItem label="Especialidad" value={trabajador.especialidad} />
+          )}
+          {trabajador.tipo_contrato && (
+            <DetailItem 
+              label="Tipo Contrato" 
+              value={trabajador.tipo_contrato.charAt(0).toUpperCase() + trabajador.tipo_contrato.slice(1)} 
+            />
+          )}
+          {trabajador.horas_trabajo && (
+            <DetailItem label="Horas" value={`${trabajador.horas_trabajo}h/semana`} />
+          )}
+          {trabajador.fecha_nacimiento && (
+            <DetailItem 
+              label="Fecha Nacimiento" 
+              value={new Date(trabajador.fecha_nacimiento).toLocaleDateString('es-ES', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+              })} 
+            />
+          )}
+        </div>
+        
+        {/* Botones de acción */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'flex-end',
+          gap: '10px' 
+        }}>
+          <button
+            onClick={handleViewDetails}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              backgroundColor: '#F3F4F6',
+              border: 'none',
+              borderRadius: '5px',
+              fontSize: '13px',
+              color: '#4B5563',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#E5E7EB';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#F3F4F6';
+            }}
+          >
+            <EyeIcon style={{ width: '16px', height: '16px' }} />
+            Ver Detalles
+          </button>
+          
+          {/* Nuevo botón Dashboard (solo para trabajadores de producción) */}
+          {trabajador.tipo === 'produccion' && onViewDashboard && (
+            <button
+              onClick={handleViewDashboard}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                backgroundColor: '#EEF2FF',
+                border: 'none',
+                borderRadius: '5px',
+                fontSize: '13px',
+                color: '#4F46E5',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#E0E7FF';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#EEF2FF';
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: '16px', height: '16px' }}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+              </svg>
+              Ver Dashboard
+            </button>
+          )}
         </div>
       </div>
     </div>

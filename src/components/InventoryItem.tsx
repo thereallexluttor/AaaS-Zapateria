@@ -1,5 +1,5 @@
 import { Material, Herramienta, Producto } from '../lib/supabase';
-import { EyeIcon, TagIcon, ClockIcon, CurrencyDollarIcon, ChartBarIcon, SwatchIcon, ScaleIcon, CalendarIcon, CubeIcon, ShoppingBagIcon, WrenchIcon, ArchiveBoxIcon, PencilSquareIcon, ShoppingCartIcon, ListBulletIcon, ExclamationTriangleIcon, ClipboardDocumentCheckIcon, ReceiptRefundIcon } from '@heroicons/react/24/outline';
+import { EyeIcon, TagIcon, ClockIcon, CurrencyDollarIcon, ChartBarIcon, SwatchIcon, ScaleIcon, CalendarIcon, CubeIcon, ShoppingBagIcon, WrenchIcon, ArchiveBoxIcon, PencilSquareIcon, ShoppingCartIcon, ListBulletIcon, ExclamationTriangleIcon, ClipboardDocumentCheckIcon, ReceiptRefundIcon, ChevronDownIcon, EllipsisHorizontalIcon } from '@heroicons/react/24/outline';
 import { useState } from 'react';
 
 // Combinar los tipos para poder trabajar con cualquier ítem del inventario
@@ -389,66 +389,66 @@ export default function InventoryItem({
           {/* Botón Seguir Órdenes */}
           <button 
             style={{
-              backgroundColor: '#3B82F6',
-              color: 'white',
-              borderRadius: '6px',
-              padding: '8px 12px',
-              fontSize: '13px',
-              fontWeight: 500,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-              border: 'none',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px'
+              justifyContent: 'center',
+              gap: '4px',
+              padding: '6px 10px',
+              borderRadius: '6px',
+              border: '1px solid #E5E7EB',
+              backgroundColor: '#F9FAFB',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 500,
+              color: '#4F46E5',
+              transition: 'all 0.2s ease',
             }}
             data-action-button="true"
             onClick={() => onViewOrders ? onViewOrders(item) : null}
             onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'scale(1.05)';
-              e.currentTarget.style.backgroundColor = '#2563EB';
+              e.currentTarget.style.backgroundColor = '#F3F4F6';
+              e.currentTarget.style.transform = 'translateY(-1px)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.backgroundColor = '#3B82F6';
+              e.currentTarget.style.backgroundColor = '#F9FAFB';
+              e.currentTarget.style.transform = 'translateY(0)';
             }}
           >
             <ListBulletIcon style={{ width: '16px', height: '16px' }} />
-            Órdenes
+            <span>Órdenes</span>
           </button>
           
           {/* Botón Ordenar material */}
           {onOrder && (
             <button 
               style={{
-                backgroundColor: '#10B981',
-                color: 'white',
-                borderRadius: '6px',
-                padding: '8px 12px',
-                fontSize: '13px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                border: 'none',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px'
+                justifyContent: 'center',
+                gap: '4px',
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: '1px solid #E5E7EB',
+                backgroundColor: '#F9FAFB',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: '#4F46E5',
+                transition: 'all 0.2s ease',
               }}
               data-action-button="true"
               onClick={() => onOrder(item)}
               onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(1.05)';
-                e.currentTarget.style.backgroundColor = '#059669';
+                e.currentTarget.style.backgroundColor = '#F3F4F6';
+                e.currentTarget.style.transform = 'translateY(-1px)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.backgroundColor = '#10B981';
+                e.currentTarget.style.backgroundColor = '#F9FAFB';
+                e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
               <ShoppingCartIcon style={{ width: '16px', height: '16px' }} />
-              Ordenar
+              <span>Ordenar</span>
             </button>
           )}
           
@@ -456,33 +456,33 @@ export default function InventoryItem({
           {onEdit && (
             <button 
               style={{
-                backgroundColor: '#4F46E5',
-                color: 'white',
-                borderRadius: '6px',
-                padding: '8px 12px',
-                fontSize: '13px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                border: 'none',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px'
+                justifyContent: 'center',
+                gap: '4px',
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: '1px solid #E5E7EB',
+                backgroundColor: '#F9FAFB',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: '#4F46E5',
+                transition: 'all 0.2s ease',
               }}
               data-action-button="true"
               onClick={() => onEdit(item)}
               onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(1.05)';
-                e.currentTarget.style.backgroundColor = '#4338CA';
+                e.currentTarget.style.backgroundColor = '#F3F4F6';
+                e.currentTarget.style.transform = 'translateY(-1px)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.backgroundColor = '#4F46E5';
+                e.currentTarget.style.backgroundColor = '#F9FAFB';
+                e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
               <PencilSquareIcon style={{ width: '16px', height: '16px' }} />
-              Editar
+              <span>Editar</span>
             </button>
           )}
         </div>
@@ -498,141 +498,221 @@ export default function InventoryItem({
           gap: '8px',
           zIndex: 10,
         }}>
-          {/* Botón Ver Daños y Reparaciones */}
-          {onViewDamages && (
-            <button 
-              style={{
-                backgroundColor: '#F97316',
-                color: 'white',
-                borderRadius: '6px',
-                padding: '8px 12px',
-                fontSize: '13px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                border: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
-              data-action-button="true"
-              onClick={() => onViewDamages(item)}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(1.05)';
-                e.currentTarget.style.backgroundColor = '#EA580C';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.backgroundColor = '#F97316';
-              }}
-            >
-              <ExclamationTriangleIcon style={{ width: '16px', height: '16px' }} />
-              Ver Reparaciones
-            </button>
-          )}
-          
           {/* Botón Ver Mantenimientos */}
           {onViewMaintenance && (
             <button 
               style={{
-                backgroundColor: '#8B5CF6',
-                color: 'white',
-                borderRadius: '6px',
-                padding: '8px 12px',
-                fontSize: '13px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                border: 'none',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px'
+                justifyContent: 'center',
+                gap: '4px',
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: '1px solid #E5E7EB',
+                backgroundColor: '#F9FAFB',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: '#4F46E5',
+                transition: 'all 0.2s ease',
               }}
               data-action-button="true"
               onClick={() => onViewMaintenance(item)}
               onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(1.05)';
-                e.currentTarget.style.backgroundColor = '#7C3AED';
+                e.currentTarget.style.backgroundColor = '#F3F4F6';
+                e.currentTarget.style.transform = 'translateY(-1px)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.backgroundColor = '#8B5CF6';
+                e.currentTarget.style.backgroundColor = '#F9FAFB';
+                e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
               <WrenchIcon style={{ width: '16px', height: '16px' }} />
-              Ver Mantenimientos
+              <span>Mantenimientos</span>
             </button>
           )}
-          
-          {/* Botón Programar Mantenimiento */}
-          {onScheduleMaintenance && (
+
+          {/* Botón Ver Daños y Reparaciones */}
+          {onViewDamages && (
             <button 
               style={{
-                backgroundColor: '#3B82F6',
-                color: 'white',
-                borderRadius: '6px',
-                padding: '8px 12px',
-                fontSize: '13px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                border: 'none',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px'
-              }}
-              data-action-button="true"
-              onClick={() => onScheduleMaintenance(item)}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(1.05)';
-                e.currentTarget.style.backgroundColor = '#2563EB';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.backgroundColor = '#3B82F6';
-              }}
-            >
-              <ClipboardDocumentCheckIcon style={{ width: '16px', height: '16px' }} />
-              Mantenimiento
-            </button>
-          )}
-          
-          {/* Botón Reportar Daño */}
-          {onReportDamage && (
-            <button 
-              style={{
-                backgroundColor: '#EF4444',
-                color: 'white',
+                justifyContent: 'center',
+                gap: '4px',
+                padding: '6px 10px',
                 borderRadius: '6px',
-                padding: '8px 12px',
+                border: '1px solid #E5E7EB',
+                backgroundColor: '#F9FAFB',
+                cursor: 'pointer',
                 fontSize: '13px',
                 fontWeight: 500,
-                cursor: 'pointer',
+                color: '#4F46E5',
                 transition: 'all 0.2s ease',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                border: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
               }}
               data-action-button="true"
-              onClick={() => onReportDamage(item)}
+              onClick={() => onViewDamages(item)}
               onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(1.05)';
-                e.currentTarget.style.backgroundColor = '#DC2626';
+                e.currentTarget.style.backgroundColor = '#F3F4F6';
+                e.currentTarget.style.transform = 'translateY(-1px)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.backgroundColor = '#EF4444';
+                e.currentTarget.style.backgroundColor = '#F9FAFB';
+                e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
               <ExclamationTriangleIcon style={{ width: '16px', height: '16px' }} />
-              Reportar daño
+              <span>Reparaciones</span>
             </button>
           )}
+          
+          {/* Botón Editar herramienta */}
+          {onEdit && (
+            <button 
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: '1px solid #E5E7EB',
+                backgroundColor: '#F9FAFB',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: '#4F46E5',
+                transition: 'all 0.2s ease',
+              }}
+              data-action-button="true"
+              onClick={() => onEdit(item)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#F3F4F6';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#F9FAFB';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            >
+              <PencilSquareIcon style={{ width: '16px', height: '16px' }} />
+              <span>Editar</span>
+            </button>
+          )}
+          
+          {/* Menú desplegable para acciones adicionales */}
+          <div className="dropdown" style={{ position: 'relative' }}>
+            <button 
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: '1px solid #E5E7EB',
+                backgroundColor: '#F9FAFB',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: '#4F46E5',
+                transition: 'all 0.2s ease',
+              }}
+              data-action-button="true"
+              onClick={(e) => {
+                e.stopPropagation();
+                const dropdown = e.currentTarget.nextElementSibling;
+                if (dropdown) {
+                  dropdown.classList.toggle('show');
+                }
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#F3F4F6';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#F9FAFB';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            >
+              <span>Más</span>
+              <EllipsisHorizontalIcon style={{ width: '16px', height: '16px' }} />
+            </button>
+            <div 
+              className="dropdown-content" 
+              style={{
+                display: 'none',
+                position: 'absolute',
+                right: 0,
+                backgroundColor: '#FFFFFF',
+                minWidth: '160px',
+                boxShadow: '0px 8px 16px 0px rgba(0,0,0,0.1)',
+                zIndex: 1,
+                borderRadius: '6px',
+                border: '1px solid #E5E7EB',
+                marginTop: '5px'
+              }}
+            >
+              {/* Botón Programar Mantenimiento */}
+              {onScheduleMaintenance && (
+                <a 
+                  href="#" 
+                  style={{
+                    color: '#4F46E5',
+                    padding: '12px 16px',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    borderBottom: '1px solid #E5E7EB'
+                  }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onScheduleMaintenance(item);
+                    // Cerrar el dropdown
+                    document.querySelectorAll('.dropdown-content').forEach(el => {
+                      el.classList.remove('show');
+                    });
+                  }}
+                >
+                  <ClipboardDocumentCheckIcon style={{ width: '16px', height: '16px' }} />
+                  <span>Programar Mantenimiento</span>
+                </a>
+              )}
+              
+              {/* Botón Reportar Daño */}
+              {onReportDamage && (
+                <a 
+                  href="#" 
+                  style={{
+                    color: '#4F46E5',
+                    padding: '12px 16px',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '13px',
+                    fontWeight: 500
+                  }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onReportDamage(item);
+                    // Cerrar el dropdown
+                    document.querySelectorAll('.dropdown-content').forEach(el => {
+                      el.classList.remove('show');
+                    });
+                  }}
+                >
+                  <ExclamationTriangleIcon style={{ width: '16px', height: '16px' }} />
+                  <span>Reportar Daño</span>
+                </a>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -650,33 +730,33 @@ export default function InventoryItem({
           {onViewSalesHistory && (
             <button 
               style={{
-                backgroundColor: '#F59E0B',
-                color: 'white',
-                borderRadius: '6px',
-                padding: '8px 12px',
-                fontSize: '13px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                border: 'none',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px'
+                justifyContent: 'center',
+                gap: '4px',
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: '1px solid #E5E7EB',
+                backgroundColor: '#F9FAFB',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: '#4F46E5',
+                transition: 'all 0.2s ease',
               }}
               data-action-button="true"
               onClick={() => onViewSalesHistory(item)}
               onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(1.05)';
-                e.currentTarget.style.backgroundColor = '#D97706';
+                e.currentTarget.style.backgroundColor = '#F3F4F6';
+                e.currentTarget.style.transform = 'translateY(-1px)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.backgroundColor = '#F59E0B';
+                e.currentTarget.style.backgroundColor = '#F9FAFB';
+                e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
               <ReceiptRefundIcon style={{ width: '16px', height: '16px' }} />
-              Ver ventas
+              <span>Ver ventas</span>
             </button>
           )}
           
@@ -684,33 +764,33 @@ export default function InventoryItem({
           {onEdit && (
             <button 
               style={{
-                backgroundColor: '#4F46E5',
-                color: 'white',
-                borderRadius: '6px',
-                padding: '8px 12px',
-                fontSize: '13px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                border: 'none',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px'
+                justifyContent: 'center',
+                gap: '4px',
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: '1px solid #E5E7EB',
+                backgroundColor: '#F9FAFB',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: '#4F46E5',
+                transition: 'all 0.2s ease',
               }}
               data-action-button="true"
               onClick={() => onEdit(item)}
               onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(1.05)';
-                e.currentTarget.style.backgroundColor = '#4338CA';
+                e.currentTarget.style.backgroundColor = '#F3F4F6';
+                e.currentTarget.style.transform = 'translateY(-1px)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.backgroundColor = '#4F46E5';
+                e.currentTarget.style.backgroundColor = '#F9FAFB';
+                e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
               <PencilSquareIcon style={{ width: '16px', height: '16px' }} />
-              Editar
+              <span>Editar</span>
             </button>
           )}
         </div>
