@@ -125,7 +125,13 @@ function getItemStatus(item: InventoryItemType): { text: string; color: string }
 function getItemImage(item: InventoryItemType) {
   // Si el item tiene una URL de imagen, usarla
   if ('imagen_url' in item && item.imagen_url) {
-    return <img src={item.imagen_url} alt={item.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }} />;
+    return <img src={item.imagen_url} alt={item.nombre} style={{ 
+      width: '100%', 
+      height: '100%', 
+      objectFit: 'cover', 
+      borderRadius: '8px',
+      objectPosition: 'center'
+    }} />;
   }
   
   // De lo contrario, usar un icono predeterminado basado en el tipo
@@ -150,7 +156,7 @@ function getItemImage(item: InventoryItemType) {
       alignItems: 'center',
       justifyContent: 'center',
       fontWeight: 600,
-      fontSize: '16px',
+      fontSize: '24px',
       color: textColor,
       borderRadius: '8px'
     }}>
@@ -297,6 +303,26 @@ function formatPrice(price: string | number): string {
   return `$${numPrice.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
 }
 
+// Helper component for detail items
+function DetailItem({ label, value, valueColor }: { 
+  label: string, 
+  value: string | number | null | undefined, 
+  valueColor?: string 
+}) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ fontSize: '13px', color: '#6B7280' }}>{label}</div>
+      <div style={{ 
+        fontSize: '14px',
+        fontWeight: 500,
+        color: valueColor || '#111827'
+      }}>
+        {value || 'No especificado'}
+      </div>
+    </div>
+  );
+}
+
 export default function InventoryItem({ 
   item, 
   onViewDetails, 
@@ -309,6 +335,7 @@ export default function InventoryItem({
   onViewDamages,
   onViewSalesHistory
 }: InventoryItemProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const status = getItemStatus(item);
   const reference = getItemReference(item);
   const stock = getItemStock(item);
@@ -355,14 +382,23 @@ export default function InventoryItem({
       fontFamily: "'Poppins', sans-serif",
       position: 'relative',
       boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-      cursor: 'pointer'
+      cursor: item.type === 'material' ? 'pointer' : 'default'
     }}
     onClick={(e) => {
-      // Prevenir que el clic se propague si se hace clic en los botones
-      if ((e.target as HTMLElement).closest('[data-action-button="true"]')) {
-        return;
+      // Solo expandir si es un material
+      if (item.type === 'material') {
+        // Prevenir que el clic se propague si se hace clic en los botones
+        if ((e.target as HTMLElement).closest('[data-action-button="true"]')) {
+          return;
+        }
+        setIsExpanded(!isExpanded);
+      } else {
+        // Para otros tipos, mantener el comportamiento original
+        if ((e.target as HTMLElement).closest('[data-action-button="true"]')) {
+          return;
+        }
+        onViewDetails(item);
       }
-      onViewDetails(item);
     }}
     onMouseEnter={(e) => {
       e.currentTarget.style.transform = 'translateY(-2px)';
@@ -800,17 +836,20 @@ export default function InventoryItem({
       <div style={{
         display: 'flex',
         gap: '16px',
-        alignItems: 'flex-start',
+        alignItems: 'center',
       }}>
         {/* Icono/Imagen */}
         <div style={{ 
-          width: '64px', 
-          height: '64px', 
+          width: '96px',
+          height: '96px',
           borderRadius: '8px',
           overflow: 'hidden',
           flexShrink: 0,
           border: '1px solid #E5E7EB',
           backgroundColor: bgColor,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}>
           {getItemImage(item)}
         </div>
@@ -822,13 +861,31 @@ export default function InventoryItem({
           flexGrow: 1,
           gap: '4px'
         }}>
-          {/* Nombre del producto */}
+          {/* Nombre del producto con icono de expansión para materiales */}
           <div style={{ 
-            fontSize: '18px', 
-            fontWeight: 600, 
-            color: '#111827',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px'
           }}>
-            {item.nombre}
+            <div style={{ 
+              fontSize: '18px', 
+              fontWeight: 600, 
+              color: '#111827',
+            }}>
+              {item.nombre}
+            </div>
+            {item.type === 'material' && (
+              <ChevronDownIcon 
+                style={{ 
+                  width: '20px', 
+                  height: '20px',
+                  color: '#6B7280',
+                  transform: isExpanded ? 'rotate(180deg)' : 'rotate(0)',
+                  transition: 'transform 0.3s ease'
+                }} 
+              />
+            )}
           </div>
           
           {/* Tipo y referencia */}
@@ -950,7 +1007,7 @@ export default function InventoryItem({
                 <span>{materialInfo.precio_unitario}</span>
               </div>
               
-              {/* Stock */}
+              {/* Stock con unidades */}
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -963,7 +1020,7 @@ export default function InventoryItem({
                 fontWeight: 500
               }}>
                 <ArchiveBoxIcon style={{ width: '14px', height: '14px' }} />
-                <span>Stock: {stock}</span>
+                <span>Stock: {stock} {(item as Material & { type: 'material' }).unidades}</span>
               </div>
             </div>
           )}
@@ -1094,113 +1151,88 @@ export default function InventoryItem({
         </div>
       )}
       
-      {/* Información detallada para materiales */}
+      {/* Información detallada para materiales con animación */}
       {item.type === 'material' && materialInfo && (
         <div style={{ 
-          borderTop: '1px solid #E5E7EB', 
-          paddingTop: '12px',
-          marginTop: '4px'
+          overflow: 'hidden',
+          maxHeight: isExpanded ? '1000px' : '0',
+          opacity: isExpanded ? 1 : 0,
+          transition: 'all 0.3s ease-in-out',
+          borderTop: isExpanded ? '1px solid #E5E7EB' : 'none',
+          paddingTop: isExpanded ? '12px' : '0',
+          marginTop: isExpanded ? '4px' : '0'
         }}>
           <div style={{ 
             fontSize: '14px', 
             fontWeight: 600, 
             color: '#374151', 
-            marginBottom: '10px' 
+            marginBottom: '12px' 
           }}>
-            Detalles del Material:
+            Detalles del Material
           </div>
           
+          {/* Grid principal */}
           <div style={{
-            display: 'flex',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
             gap: '12px',
-            flexWrap: 'wrap'
           }}>
-            {/* Medidas */}
+            {/* Columna 1: Información básica */}
             <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              padding: '12px',
               backgroundColor: '#F9FAFB',
-              padding: '8px 12px',
               borderRadius: '8px',
               border: '1px solid #E5E7EB',
-              minWidth: '110px',
             }}>
-              <div style={{ fontSize: '13px', color: '#6B7280' }}>
-                Medidas
-              </div>
-              <div style={{ 
-                marginTop: '4px', 
-                fontSize: '14px',
-                fontWeight: 500,
-                color: '#111827'
-              }}>
-                {materialInfo.medidas}
-              </div>
+              <DetailItem label="ID" value={(item as Material & { type: 'material' }).id} />
+              <DetailItem label="Nombre" value={item.nombre} />
+              <DetailItem label="Referencia" value={(item as Material & { type: 'material' }).referencia} />
+              <DetailItem label="Categoría" value={(item as Material & { type: 'material' }).categoria} />
             </div>
-            
-            {/* Categoría */}
+
+            {/* Columna 2: Stock y precios */}
             <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              padding: '12px',
               backgroundColor: '#F9FAFB',
-              padding: '8px 12px',
               borderRadius: '8px',
               border: '1px solid #E5E7EB',
-              minWidth: '110px',
             }}>
-              <div style={{ fontSize: '13px', color: '#6B7280' }}>
-                Categoría
-              </div>
-              <div style={{ 
-                marginTop: '4px', 
-                fontSize: '14px',
-                fontWeight: 500,
-                color: '#111827'
-              }}>
-                {(item as Material & { type: 'material' }).categoria || 'No especificada'}
-              </div>
+              <DetailItem label="Stock" value={(item as Material & { type: 'material' }).stock} />
+              <DetailItem label="Stock Mínimo" value={(item as Material & { type: 'material' }).stock_minimo} />
+              <DetailItem 
+                label="Precio" 
+                value={formatPrice((item as Material & { type: 'material' }).precio || 0)} 
+                valueColor="#10B981"
+              />
+              <DetailItem label="Unidades" value={(item as Material & { type: 'material' }).unidades} />
             </div>
-            
-            {/* Ubicación */}
+
+            {/* Columna 3: Proveedor y ubicación */}
             <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              padding: '12px',
               backgroundColor: '#F9FAFB',
-              padding: '8px 12px',
               borderRadius: '8px',
               border: '1px solid #E5E7EB',
-              minWidth: '110px',
             }}>
-              <div style={{ fontSize: '13px', color: '#6B7280' }}>
-                Ubicación
-              </div>
-              <div style={{ 
-                marginTop: '4px', 
-                fontSize: '14px',
-                fontWeight: 500,
-                color: '#111827'
-              }}>
-                {(item as Material & { type: 'material' }).ubicacion || 'No especificada'}
-              </div>
-            </div>
-            
-            {/* Última compra */}
-            <div style={{
-              backgroundColor: '#F9FAFB',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              border: '1px solid #E5E7EB',
-              minWidth: '130px',
-            }}>
-              <div style={{ fontSize: '13px', color: '#6B7280' }}>
-                Última compra
-              </div>
-              <div style={{ 
-                marginTop: '4px', 
-                fontSize: '14px',
-                fontWeight: 500,
-                color: '#111827'
-              }}>
-                {materialInfo.ultima_compra}
-              </div>
+              <DetailItem label="Proveedor" value={(item as Material & { type: 'material' }).proveedor} />
+              <DetailItem label="Ubicación" value={(item as Material & { type: 'material' }).ubicacion} />
+              <DetailItem 
+                label="Fecha Adquisición" 
+                value={(item as Material & { type: 'material' }).fecha_adquisicion} 
+              />
             </div>
           </div>
-          
-          {/* Descripción si existe */}
+
+          {/* Descripción */}
           {(item as Material & { type: 'material' }).descripcion && (
             <div style={{ 
               marginTop: '12px',
@@ -1209,7 +1241,12 @@ export default function InventoryItem({
               borderRadius: '8px',
               border: '1px solid #E5E7EB',
             }}>
-              <div style={{ fontSize: '13px', color: '#6B7280', marginBottom: '4px' }}>
+              <div style={{ 
+                fontSize: '13px', 
+                color: '#6B7280', 
+                marginBottom: '4px',
+                fontWeight: 500
+              }}>
                 Descripción
               </div>
               <div style={{ 

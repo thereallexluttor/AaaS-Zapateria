@@ -1,0 +1,22 @@
+create table public.tareas_produccion (
+  id serial not null,
+  venta_id integer not null,
+  numero_producto integer not null,
+  producto_id integer not null,
+  paso_id integer not null,
+  nombre_paso text not null,
+  descripcion text null,
+  duracion_estimada interval null,
+  rol_requerido text not null,
+  trabajador_id integer not null,
+  estado text not null default 'Pendiente'::text,
+  fecha_asignacion timestamp without time zone null default CURRENT_TIMESTAMP,
+  fecha_inicio date null,
+  fecha_fin date null,
+  timer double precision null,
+  constraint tareas_produccion_pkey primary key (id),
+  constraint tareas_produccion_paso_id_fkey foreign KEY (paso_id) references pasos_produccion (id),
+  constraint tareas_produccion_producto_id_fkey foreign KEY (producto_id) references productos_table (id),
+  constraint tareas_produccion_trabajador_id_fkey foreign KEY (trabajador_id) references trabajadores (id),
+  constraint tareas_produccion_venta_id_fkey foreign KEY (venta_id) references ventas (id)
+) TABLESPACE pg_default;
