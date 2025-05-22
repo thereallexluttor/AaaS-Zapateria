@@ -5,6 +5,7 @@ import ProductoFormComponent from '../components/ProductoForm';
 import HerramientaFormComponent from '../components/HerramientaForm';
 import OrdenMaterialForm from '../components/OrdenMaterialForm';
 import MaterialOrdenList from '../components/MaterialOrdenList';
+import MaterialOrderStats from '../components/MaterialOrderStats';
 import HerramientaDañoFormComponent from '../components/HerramientaDañoForm';
 import HerramientaMantenimientoFormComponent from '../components/HerramientaMantenimientoForm';
 import HerramientaMantenimientoListComponent from '../components/HerramientaMantenimientoList';
@@ -15,7 +16,7 @@ import { useInventario } from '../lib/hooks';
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import { Herramienta } from '../lib/types';
 
-type ModalType = 'material' | 'producto' | 'herramienta' | 'ordenMaterial' | 'herramientaDaño' | 'herramientaMantenimiento' | 'herramientaMantenimientoList' | 'herramientaDañoList' | 'ventasHistorial' | null;
+type ModalType = 'material' | 'producto' | 'herramienta' | 'ordenMaterial' | 'orderStats' | 'herramientaDaño' | 'herramientaMantenimiento' | 'herramientaMantenimientoList' | 'herramientaDañoList' | 'ventasHistorial' | null;
 type FilterTab = 'materiales' | 'productos' | 'herramientas';
 type ViewMode = 'list' | 'materialOrdenes';
 
@@ -235,6 +236,15 @@ function Inventario() {
       setSelectedItem(item);
       setActiveModal('ventasHistorial');
       console.log('Ver historial de ventas de producto:', item);
+    }
+  }, []);
+
+  // Nueva función para ver estadísticas de órdenes de materiales
+  const handleViewOrderStats = useCallback((item: InventoryItemType) => {
+    if (item.type === 'material') {
+      setSelectedItem(item);
+      setActiveModal('orderStats');
+      console.log('Ver estadísticas de órdenes de material:', item);
     }
   }, []);
 
@@ -471,6 +481,7 @@ function Inventario() {
                   onViewMaintenance={item.type === 'herramienta' ? handleViewMaintenance : undefined}
                   onViewDamages={item.type === 'herramienta' ? handleViewDamages : undefined}
                   onViewSalesHistory={item.type === 'producto' ? handleViewSalesHistory : undefined}
+                  onViewOrderStats={item.type === 'material' ? handleViewOrderStats : undefined}
                 />
               </div>
             ))}
@@ -558,6 +569,14 @@ function Inventario() {
 
           {activeModal === 'ordenMaterial' && (
             <OrdenMaterialForm 
+              onClose={closeModal}
+              isClosing={isClosing}
+              material={selectedItem}
+            />
+          )}
+
+          {activeModal === 'orderStats' && selectedItem && selectedItem.type === 'material' && (
+            <MaterialOrderStats
               onClose={closeModal}
               isClosing={isClosing}
               material={selectedItem}

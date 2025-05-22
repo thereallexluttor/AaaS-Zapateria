@@ -145,6 +145,7 @@ export type Producto = {
   imagen_url: string | null; // Added null
   qr_code: string | null; // Renamed from QR_Code, added null
   created_at: string | null; // Added null (assuming timestamp comes as string)
+  pasos_produccion: string;
 };
 
 export type Cliente = {

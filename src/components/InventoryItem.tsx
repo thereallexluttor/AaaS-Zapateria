@@ -16,6 +16,7 @@ interface ProductoMockupData {
   tags: string[];
   colores: string[];
   tallas_info: { numero: string; stock: number | null; stockMinimo: number | null }[];
+  proveedor: string;
 }
 
 // Tipo para mockup de datos adicionales que aún no existen en la tabla Material
@@ -55,6 +56,7 @@ export interface InventoryItemProps {
   onViewMaintenance?: (item: InventoryItemType) => void;
   onViewDamages?: (item: InventoryItemType) => void;
   onViewSalesHistory?: (item: InventoryItemType) => void;
+  onViewOrderStats?: (item: InventoryItemType) => void;
 }
 
 // Determinar el estado del ítem basado en su tipo y propiedades
@@ -234,6 +236,7 @@ function getProductAdditionalInfo(producto: Producto & { type: 'producto' }): Pr
     tags: [],
     colores: colores,
     tallas_info: tallasInfo,
+    proveedor: '',
   };
 }
 
@@ -333,7 +336,8 @@ export default function InventoryItem({
   onScheduleMaintenance,
   onViewMaintenance,
   onViewDamages,
-  onViewSalesHistory
+  onViewSalesHistory,
+  onViewOrderStats
 }: InventoryItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const status = getItemStatus(item);
@@ -382,11 +386,11 @@ export default function InventoryItem({
       fontFamily: "'Poppins', sans-serif",
       position: 'relative',
       boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-      cursor: item.type === 'material' ? 'pointer' : 'default'
+      cursor: item.type === 'material' || item.type === 'herramienta' ? 'pointer' : 'default'
     }}
     onClick={(e) => {
-      // Solo expandir si es un material
-      if (item.type === 'material') {
+      // Expandir si es un material o herramienta
+      if (item.type === 'material' || item.type === 'herramienta') {
         // Prevenir que el clic se propague si se hace clic en los botones
         if ((e.target as HTMLElement).closest('[data-action-button="true"]')) {
           return;
@@ -422,6 +426,42 @@ export default function InventoryItem({
           gap: '8px',
           zIndex: 10,
         }}>
+          {/* Botón Ver Estadísticas */}
+          <button 
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              padding: '6px 10px',
+              borderRadius: '6px',
+              border: '1px solid #E5E7EB',
+              backgroundColor: '#F9FAFB',
+              cursor: onViewOrderStats ? 'pointer' : 'default',
+              fontSize: '13px',
+              fontWeight: 500,
+              color: '#4F46E5',
+              transition: 'all 0.2s ease',
+            }}
+            data-action-button="true"
+            onClick={() => onViewOrderStats ? onViewOrderStats(item) : null}
+            onMouseEnter={(e) => {
+              if (onViewOrderStats) {
+                e.currentTarget.style.backgroundColor = '#F3F4F6';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (onViewOrderStats) {
+                e.currentTarget.style.backgroundColor = '#F9FAFB';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }
+            }}
+          >
+            <ChartBarIcon style={{ width: '16px', height: '16px' }} />
+            <span>Estadísticas</span>
+          </button>
+          
           {/* Botón Seguir Órdenes */}
           <button 
             style={{
@@ -861,7 +901,7 @@ export default function InventoryItem({
           flexGrow: 1,
           gap: '4px'
         }}>
-          {/* Nombre del producto con icono de expansión para materiales */}
+          {/* Nombre del producto con icono de expansión para materiales y herramientas */}
           <div style={{ 
             display: 'flex',
             alignItems: 'center',
@@ -875,7 +915,7 @@ export default function InventoryItem({
             }}>
               {item.nombre}
             </div>
-            {item.type === 'material' && (
+            {(item.type === 'material' || item.type === 'herramienta') && (
               <ChevronDownIcon 
                 style={{ 
                   width: '20px', 
@@ -910,29 +950,14 @@ export default function InventoryItem({
             )}
           </div>
           
-          {/* Badges específicos por tipo de producto */}
-          {item.type === 'producto' && productInfo && (
+          {/* Badges para productos */}
+          {item.type === 'producto' && (
             <div style={{ 
               display: 'flex', 
               flexWrap: 'wrap', 
               gap: '8px', 
               marginTop: '6px' 
             }}>
-              {/* Precio */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                backgroundColor: '#FFF7E6',
-                padding: '4px 10px',
-                borderRadius: '16px',
-                color: '#D97706',
-                fontSize: '13px',
-                fontWeight: 500
-              }}>
-                <span>{formatPrice(productInfo.precio_venta)}</span>
-              </div>
-
               {/* Categoría */}
               <div style={{
                 display: 'flex',
@@ -945,25 +970,57 @@ export default function InventoryItem({
                 fontSize: '13px',
                 fontWeight: 500
               }}>
-                <span>{productInfo.categoria || "Unisex"}</span>
+                <TagIcon style={{ width: '14px', height: '14px' }} />
+                <span>{(item as Producto & { type: 'producto' }).categoria || 'General'}</span>
               </div>
 
-              {/* Colores */}
-              {productInfo?.colores?.length > 0 && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  backgroundColor: '#F5F5F5',
-                  padding: '4px 10px',
-                  borderRadius: '16px',
-                  color: '#4B5563',
-                  fontSize: '13px',
-                  fontWeight: 500
-                }}>
-                  <span>{productInfo.colores.join(', ')}</span>
-                </div>
-              )}
+              {/* Precio */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                backgroundColor: '#FFF7E6',
+                padding: '4px 10px',
+                borderRadius: '16px',
+                color: '#D97706',
+                fontSize: '13px',
+                fontWeight: 500
+              }}>
+                <CurrencyDollarIcon style={{ width: '14px', height: '14px' }} />
+                <span>{formatPrice((item as Producto & { type: 'producto' }).precio)}</span>
+              </div>
+
+              {/* Tiempo Fabricación */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                backgroundColor: '#F0FDF4',
+                padding: '4px 10px',
+                borderRadius: '16px',
+                color: '#10B981',
+                fontSize: '13px',
+                fontWeight: 500
+              }}>
+                <ClockIcon style={{ width: '14px', height: '14px' }} />
+                <span>{(item as Producto & { type: 'producto' }).tiempo_fabricacion || 0} min</span>
+              </div>
+
+              {/* Tallas */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                backgroundColor: '#F3E8FF',
+                padding: '4px 10px',
+                borderRadius: '16px',
+                color: '#7C3AED',
+                fontSize: '13px',
+                fontWeight: 500
+              }}>
+                <SwatchIcon style={{ width: '14px', height: '14px' }} />
+                <span>Tallas: {((item as Producto & { type: 'producto' }).tallas || []).length}</span>
+              </div>
             </div>
           )}
           
@@ -1261,90 +1318,244 @@ export default function InventoryItem({
         </div>
       )}
       
-      {/* Información detallada para herramientas */}
+      {/* Información detallada para herramientas con animación */}
       {item.type === 'herramienta' && herramientaInfo && (
         <div style={{ 
-          borderTop: '1px solid #E5E7EB', 
-          paddingTop: '12px',
-          marginTop: '4px'
+          overflow: 'hidden',
+          maxHeight: isExpanded ? '1000px' : '0',
+          opacity: isExpanded ? 1 : 0,
+          transition: 'all 0.3s ease-in-out',
+          borderTop: isExpanded ? '1px solid #E5E7EB' : 'none',
+          paddingTop: isExpanded ? '12px' : '0',
+          marginTop: isExpanded ? '4px' : '0'
         }}>
           <div style={{ 
             fontSize: '14px', 
             fontWeight: 600, 
             color: '#374151', 
-            marginBottom: '10px' 
+            marginBottom: '12px' 
           }}>
-            Detalles de la Herramienta:
+            Detalles de la Herramienta
           </div>
           
+          {/* Grid principal */}
           <div style={{
-            display: 'flex',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
             gap: '12px',
-            flexWrap: 'wrap'
           }}>
-            {/* Fecha de adquisición */}
+            {/* Columna 1: Información básica */}
             <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              padding: '12px',
               backgroundColor: '#F9FAFB',
-              padding: '8px 12px',
               borderRadius: '8px',
               border: '1px solid #E5E7EB',
-              minWidth: '130px',
             }}>
-              <div style={{ fontSize: '13px', color: '#6B7280' }}>
-                Fecha adquisición
-              </div>
-              <div style={{ 
-                marginTop: '4px', 
-                fontSize: '14px',
-                fontWeight: 500,
-                color: '#111827'
-              }}>
-                {herramientaInfo.fecha_adquisicion}
-              </div>
+              <DetailItem label="ID" value={(item as Herramienta & { type: 'herramienta' }).id} />
+              <DetailItem label="Nombre" value={item.nombre} />
+              <DetailItem label="Modelo" value={(item as Herramienta & { type: 'herramienta' }).modelo} />
+              <DetailItem label="Número de Serie" value={(item as Herramienta & { type: 'herramienta' }).numero_serie} />
             </div>
-            
-            {/* Último mantenimiento */}
+
+            {/* Columna 2: Estado y mantenimiento */}
             <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              padding: '12px',
               backgroundColor: '#F9FAFB',
-              padding: '8px 12px',
               borderRadius: '8px',
               border: '1px solid #E5E7EB',
-              minWidth: '130px',
             }}>
-              <div style={{ fontSize: '13px', color: '#6B7280' }}>
-                Último mantenimiento
-              </div>
-              <div style={{ 
-                marginTop: '4px', 
-                fontSize: '14px',
-                fontWeight: 500,
-                color: '#111827'
-              }}>
-                {herramientaInfo.fecha_ultimo_mantenimiento}
-              </div>
+              <DetailItem 
+                label="Estado" 
+                value={(item as Herramienta & { type: 'herramienta' }).estado}
+                valueColor={status.color}
+              />
+              <DetailItem label="Último Mantenimiento" value={(item as Herramienta & { type: 'herramienta' }).ultimo_mantenimiento} />
+              <DetailItem label="Próximo Mantenimiento" value={(item as Herramienta & { type: 'herramienta' }).proximo_mantenimiento} />
+              <DetailItem label="QR Code" value={(item as Herramienta & { type: 'herramienta' }).qr_code} />
             </div>
-            
-            {/* Próxima revisión */}
+
+            {/* Columna 3: Ubicación y responsabilidad */}
             <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              padding: '12px',
               backgroundColor: '#F9FAFB',
-              padding: '8px 12px',
               borderRadius: '8px',
               border: '1px solid #E5E7EB',
-              minWidth: '130px',
             }}>
-              <div style={{ fontSize: '13px', color: '#6B7280' }}>
-                Próxima revisión
-              </div>
-              <div style={{ 
-                marginTop: '4px', 
-                fontSize: '14px',
-                fontWeight: 500,
-                color: '#111827'
-              }}>
-                {herramientaInfo.proxima_revision}
-              </div>
+              <DetailItem label="Ubicación" value={(item as Herramienta & { type: 'herramienta' }).ubicacion} />
+              <DetailItem label="Responsable" value={(item as Herramienta & { type: 'herramienta' }).responsable} />
+              <DetailItem label="Fecha Adquisición" value={(item as Herramienta & { type: 'herramienta' }).fecha_adquisicion} />
+              <DetailItem label="Creado" value={(item as Herramienta & { type: 'herramienta' }).created_at} />
             </div>
           </div>
+
+          {/* Descripción */}
+          {(item as Herramienta & { type: 'herramienta' }).descripcion && (
+            <div style={{ 
+              marginTop: '12px',
+              backgroundColor: '#F9FAFB',
+              padding: '12px',
+              borderRadius: '8px',
+              border: '1px solid #E5E7EB',
+            }}>
+              <div style={{ 
+                fontSize: '13px', 
+                color: '#6B7280', 
+                marginBottom: '4px',
+                fontWeight: 500
+              }}>
+                Descripción
+              </div>
+              <div style={{ 
+                fontSize: '14px',
+                color: '#374151',
+                lineHeight: '1.4'
+              }}>
+                {(item as Herramienta & { type: 'herramienta' }).descripcion}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Información detallada para productos con animación */}
+      {item.type === 'producto' && productInfo && (
+        <div style={{ 
+          overflow: 'hidden',
+          maxHeight: isExpanded ? '1000px' : '0',
+          opacity: isExpanded ? 1 : 0,
+          transition: 'all 0.3s ease-in-out',
+          borderTop: isExpanded ? '1px solid #E5E7EB' : 'none',
+          paddingTop: isExpanded ? '12px' : '0',
+          marginTop: isExpanded ? '4px' : '0'
+        }}>
+          <div style={{ 
+            fontSize: '14px', 
+            fontWeight: 600, 
+            color: '#374151', 
+            marginBottom: '12px' 
+          }}>
+            Detalles del Producto
+          </div>
+          
+          {/* Grid principal */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+            gap: '12px',
+          }}>
+            {/* Columna 1: Información básica */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              padding: '12px',
+              backgroundColor: '#F9FAFB',
+              borderRadius: '8px',
+              border: '1px solid #E5E7EB',
+            }}>
+              <DetailItem label="ID" value={(item as Producto & { type: 'producto' }).id} />
+              <DetailItem label="Nombre" value={item.nombre} />
+              <DetailItem label="Categoría" value={(item as Producto & { type: 'producto' }).categoria} />
+              <DetailItem 
+                label="Precio" 
+                value={formatPrice((item as Producto & { type: 'producto' }).precio || 0)} 
+                valueColor="#10B981"
+              />
+            </div>
+
+            {/* Columna 2: Fabricación */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              padding: '12px',
+              backgroundColor: '#F9FAFB',
+              borderRadius: '8px',
+              border: '1px solid #E5E7EB',
+            }}>
+              <DetailItem 
+                label="Tiempo Fabricación" 
+                value={`${(item as Producto & { type: 'producto' }).tiempo_fabricacion || 0} minutos`}
+              />
+              <DetailItem 
+                label="Pasos Producción" 
+                value={(item as Producto & { type: 'producto' }).pasos_produccion} 
+              />
+              <DetailItem 
+                label="Destacado" 
+                value={(item as Producto & { type: 'producto' }).destacado ? 'Sí' : 'No'} 
+              />
+              <DetailItem label="QR Code" value={(item as Producto & { type: 'producto' }).qr_code} />
+            </div>
+
+            {/* Columna 3: Información adicional */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              padding: '12px',
+              backgroundColor: '#F9FAFB',
+              borderRadius: '8px',
+              border: '1px solid #E5E7EB',
+            }}>
+              <DetailItem label="Colores" value={(item as Producto & { type: 'producto' }).colores} />
+              <DetailItem 
+                label="Materiales" 
+                value={
+                  Array.isArray((item as Producto & { type: 'producto' }).materiales) && 
+                  (item as Producto & { type: 'producto' }).materiales.length > 0 ? 
+                  `${(item as Producto & { type: 'producto' }).materiales.length} materiales` : 
+                  'Ninguno'
+                } 
+              />
+              <DetailItem 
+                label="Herramientas" 
+                value={
+                  Array.isArray((item as Producto & { type: 'producto' }).herramientas) && 
+                  (item as Producto & { type: 'producto' }).herramientas.length > 0 ? 
+                  `${(item as Producto & { type: 'producto' }).herramientas.length} herramientas` : 
+                  'Ninguna'
+                } 
+              />
+              <DetailItem label="Creado" value={(item as Producto & { type: 'producto' }).created_at} />
+            </div>
+          </div>
+
+          {/* Descripción */}
+          {(item as Producto & { type: 'producto' }).descripcion && (
+            <div style={{ 
+              marginTop: '12px',
+              backgroundColor: '#F9FAFB',
+              padding: '12px',
+              borderRadius: '8px',
+              border: '1px solid #E5E7EB',
+            }}>
+              <div style={{ 
+                fontSize: '13px', 
+                color: '#6B7280', 
+                marginBottom: '4px',
+                fontWeight: 500
+              }}>
+                Descripción
+              </div>
+              <div style={{ 
+                fontSize: '14px',
+                color: '#374151',
+                lineHeight: '1.4'
+              }}>
+                {(item as Producto & { type: 'producto' }).descripcion}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

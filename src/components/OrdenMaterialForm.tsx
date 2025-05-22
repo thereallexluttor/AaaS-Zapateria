@@ -73,6 +73,9 @@ function OrdenMaterialForm({ onClose, isClosing, material = null }: OrdenMateria
     responsable: '',
   });
 
+  // Estado para controlar si el formulario ha sido inicializado
+  const [isInitialized, setIsInitialized] = useState(false);
+
   // Estado para errores de validación
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof OrdenMaterialForm, string>>>({});
   // Estado para mensajes de errores del servidor
@@ -110,7 +113,7 @@ function OrdenMaterialForm({ onClose, isClosing, material = null }: OrdenMateria
 
   // Cargar datos del material cuando se abre el formulario
   useEffect(() => {
-    if (material && material.type === 'material') {
+    if (material && material.type === 'material' && !isInitialized) {
       // Calcular fecha de entrega estimada (7 días después de la fecha actual)
       const fechaEntregaEstimada = new Date();
       fechaEntregaEstimada.setDate(fechaEntregaEstimada.getDate() + 7);
@@ -138,17 +141,22 @@ function OrdenMaterialForm({ onClose, isClosing, material = null }: OrdenMateria
         notas: `Pedido de ${material.nombre || 'material'} para reposición de inventario.`,
         responsable: 'Administrador', // Valor por defecto para responsable
       }));
+
+      // Marcar el formulario como inicializado
+      setIsInitialized(true);
     }
-  }, [material, unidades]);
+  }, [material, unidades, isInitialized]);
 
   const handleOrdenChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    
+    // Update the form state
     setOrdenForm(prev => ({
       ...prev,
       [name]: value
     }));
     
-    // Limpiar error cuando el usuario empieza a escribir
+    // Clear the error message if the user starts typing
     if (formErrors[name as keyof OrdenMaterialForm]) {
       setFormErrors(prev => ({
         ...prev,
@@ -156,27 +164,14 @@ function OrdenMaterialForm({ onClose, isClosing, material = null }: OrdenMateria
       }));
     }
     
-    // Actualizar precio total cuando cambia la cantidad o el precio
+    // Update the total price if the quantity or unit price changes
     if (name === 'cantidadSolicitada' || name === 'precioUnitario') {
-      calcularPrecioTotal({
-        ...ordenForm,
-        [name]: value
-      });
+      const cantidad = name === 'cantidadSolicitada' ? parseInt(value) || 0 : parseInt(ordenForm.cantidadSolicitada) || 0;
+      const precio = name === 'precioUnitario' ? parseFloat(value) || 0 : parseFloat(ordenForm.precioUnitario) || 0;
+      const total = cantidad * precio;
+      setPrecioTotal(total.toFixed(2));
     }
   };
-
-  // Función para calcular el precio total
-  const calcularPrecioTotal = useCallback((form: OrdenMaterialForm) => {
-    const cantidad = parseInt(form.cantidadSolicitada) || 0;
-    const precio = parseFloat(form.precioUnitario) || 0;
-    const total = cantidad * precio;
-    setPrecioTotal(total.toFixed(2));
-  }, []);
-  
-  // Calcular precio total cuando se cargan datos iniciales
-  useEffect(() => {
-    calcularPrecioTotal(ordenForm);
-  }, [ordenForm.cantidadSolicitada, ordenForm.precioUnitario, calcularPrecioTotal]);
 
   const validateForm = (): boolean => {
     const errors: Partial<Record<keyof OrdenMaterialForm, string>> = {};
@@ -374,7 +369,6 @@ function OrdenMaterialForm({ onClose, isClosing, material = null }: OrdenMateria
                     fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
                     backgroundColor: '#f9f9f9'
                   }}
-                  readOnly
                 />
               </div>
 
@@ -400,7 +394,6 @@ function OrdenMaterialForm({ onClose, isClosing, material = null }: OrdenMateria
                     fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
                     backgroundColor: '#f9f9f9'
                   }}
-                  readOnly
                 />
               </div>
             </div>
