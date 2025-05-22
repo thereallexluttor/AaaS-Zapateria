@@ -17,7 +17,7 @@ import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import { Herramienta } from '../lib/types';
 
 type ModalType = 'material' | 'producto' | 'herramienta' | 'ordenMaterial' | 'orderStats' | 'herramientaDaño' | 'herramientaMantenimiento' | 'herramientaMantenimientoList' | 'herramientaDañoList' | 'ventasHistorial' | null;
-type FilterTab = 'materiales' | 'productos' | 'herramientas';
+type FilterTab = 'productos' | 'herramientas' | 'materiales';
 type ViewMode = 'list' | 'materialOrdenes';
 
 function Inventario() {
@@ -25,8 +25,8 @@ function Inventario() {
   const [isClosing, setIsClosing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedItem, setSelectedItem] = useState<InventoryItemType | null>(null);
-  const [activeTab, setActiveTab] = useState<FilterTab>('materiales');
-  const [prevTab, setPrevTab] = useState<FilterTab>('materiales');
+  const [activeTab, setActiveTab] = useState<FilterTab>('productos');
+  const [prevTab, setPrevTab] = useState<FilterTab>('productos');
   const [transitionDirection, setTransitionDirection] = useState<'left' | 'right'>('right');
   const [isEditMode, setIsEditMode] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -119,7 +119,7 @@ function Inventario() {
     setActiveModal(type);
   };
   
-  const closeModal = useCallback(() => {
+  const closeModal = useCallback((shouldRefresh = false) => {
     setIsClosing(true);
     setTimeout(() => {
       setActiveModal(null);
@@ -127,8 +127,10 @@ function Inventario() {
       setIsEditMode(false);
       setSelectedItem(null);
       
-      // Actualizar el inventario después de cerrar el modal
-      refreshAllData();
+      // Solo actualizar el inventario si se especifica
+      if (shouldRefresh) {
+        refreshAllData();
+      }
     }, 300);
   }, [refreshAllData]);
   
@@ -253,9 +255,9 @@ function Inventario() {
     const allItems = getAllItems();
     
     const typeMapping: Record<FilterTab, string> = {
-      'materiales': 'material',
       'productos': 'producto',
-      'herramientas': 'herramienta'
+      'herramientas': 'herramienta',
+      'materiales': 'material'
     };
     
     return allItems.filter(item => item.type === typeMapping[activeTab]);
@@ -275,7 +277,7 @@ function Inventario() {
     }
     
     // Establecer la dirección de la transición basada en la posición de la pestaña
-    const tabOrder = ['materiales', 'productos', 'herramientas'];
+    const tabOrder = ['productos', 'herramientas', 'materiales'];
     const currentIndex = tabOrder.indexOf(activeTab);
     const nextIndex = tabOrder.indexOf(tab);
     
@@ -365,7 +367,7 @@ function Inventario() {
           marginBottom: '20px',
           paddingBottom: '2px'
         }}>
-          {(['materiales', 'productos', 'herramientas'] as FilterTab[]).map((tab) => (
+          {(['productos', 'herramientas', 'materiales'] as FilterTab[]).map((tab) => (
             <button 
               key={tab}
               onClick={() => handleTabChange(tab)}
@@ -388,9 +390,9 @@ function Inventario() {
               {/* Animación de subrayado */}
               <span className={activeTab === tab ? 'tab-underline-active' : 'tab-underline'} />
               
-              {tab === 'materiales' && '🧵 Materiales'}
               {tab === 'productos' && '👞 Productos'}
               {tab === 'herramientas' && '🔧 Herramientas'}
+              {tab === 'materiales' && '🧵 Materiales'}
             </button>
           ))}
         </div>
@@ -407,9 +409,9 @@ function Inventario() {
           justifyContent: 'space-between'
         }}>
           <span>
-            {activeTab === 'materiales' && 'Lista Materiales'}
             {activeTab === 'productos' && 'Lista Productos'}
             {activeTab === 'herramientas' && 'Lista Herramientas'}
+            {activeTab === 'materiales' && 'Lista Materiales'}
             {initialized && !loading && inventoryItems.length > 0 && 
               <span style={{ 
                 fontSize: '14px', 
@@ -497,8 +499,8 @@ function Inventario() {
                 {searchTerm 
                   ? `No se encontraron elementos para "${searchTerm}"` 
                   : `No hay ${
-                      activeTab === 'materiales' ? 'materiales' : 
-                      activeTab === 'productos' ? 'productos' : 'herramientas'
+                      activeTab === 'productos' ? 'productos' : 
+                      activeTab === 'herramientas' ? 'herramientas' : 'materiales'
                     } en el inventario.`
                 }
               </div>
@@ -543,7 +545,7 @@ function Inventario() {
         >
           {activeModal === 'material' && (
             <MaterialFormComponent 
-              onClose={closeModal}
+              onClose={() => closeModal(true)}
               isClosing={isClosing}
               isEditMode={isEditMode}
               materialToEdit={isEditMode ? selectedItem : null}
@@ -552,7 +554,7 @@ function Inventario() {
           
           {activeModal === 'producto' && (
             <ProductoFormComponent 
-              onClose={closeModal}
+              onClose={() => closeModal(true)}
               isClosing={isClosing}
               isEditMode={isEditMode}
               productoToEdit={isEditMode ? selectedItem : null}
@@ -561,7 +563,7 @@ function Inventario() {
           
           {activeModal === 'herramienta' && (
             <HerramientaFormComponent 
-              onClose={closeModal}
+              onClose={() => closeModal(true)}
               isClosing={isClosing}
               {...(isEditMode ? { isEditMode, herramientaToEdit: selectedItem } : {})}
             />
@@ -569,7 +571,7 @@ function Inventario() {
 
           {activeModal === 'ordenMaterial' && (
             <OrdenMaterialForm 
-              onClose={closeModal}
+              onClose={() => closeModal(false)}
               isClosing={isClosing}
               material={selectedItem}
             />
@@ -577,7 +579,7 @@ function Inventario() {
 
           {activeModal === 'orderStats' && selectedItem && selectedItem.type === 'material' && (
             <MaterialOrderStats
-              onClose={closeModal}
+              onClose={() => closeModal(false)}
               isClosing={isClosing}
               material={selectedItem}
             />
@@ -585,7 +587,7 @@ function Inventario() {
 
           {activeModal === 'herramientaDaño' && (
             <HerramientaDañoFormComponent
-              onClose={closeModal}
+              onClose={() => closeModal(false)}
               isClosing={isClosing}
               herramienta={selectedItem as (Herramienta & { type: 'herramienta' }) | null}
             />
@@ -593,7 +595,7 @@ function Inventario() {
 
           {activeModal === 'herramientaMantenimiento' && (
             <HerramientaMantenimientoFormComponent
-              onClose={closeModal}
+              onClose={() => closeModal(false)}
               isClosing={isClosing}
               herramienta={selectedItem as (Herramienta & { type: 'herramienta' }) | null}
             />
@@ -601,7 +603,7 @@ function Inventario() {
 
           {activeModal === 'herramientaMantenimientoList' && (
             <HerramientaMantenimientoListComponent
-              onClose={closeModal}
+              onClose={() => closeModal(false)}
               isClosing={isClosing}
               herramienta={selectedItem as (Herramienta & { type: 'herramienta' }) | null}
             />
@@ -609,7 +611,7 @@ function Inventario() {
 
           {activeModal === 'herramientaDañoList' && (
             <HerramientaDañoListComponent
-              onClose={closeModal}
+              onClose={() => closeModal(false)}
               isClosing={isClosing}
               herramienta={selectedItem as (Herramienta & { type: 'herramienta' }) | null}
             />
@@ -617,7 +619,7 @@ function Inventario() {
 
           {activeModal === 'ventasHistorial' && selectedItem && selectedItem.type === 'producto' && (
             <VentasHistorial
-              onClose={closeModal}
+              onClose={() => closeModal(false)}
               isClosing={isClosing}
               productoId={selectedItem.id ? Number(selectedItem.id) : null}
               productoNombre={selectedItem.nombre}

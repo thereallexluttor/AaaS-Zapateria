@@ -890,17 +890,27 @@ export function useInventario() {
   // Obtener todos los elementos como un solo array con tipos específicos
   const getAllItems = useCallback((): InventoryItemType[] => {
     // Implementación optimizada para reducir carga de procesamiento
+    // Ordenar cada categoría alfabéticamente por nombre
+    const sortedMaterials = materials
+      .map(m => ({ ...m, type: 'material' as const }))
+      .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es', { numeric: true }));
+    
+    const sortedHerramientas = herramientas
+      .map(h => ({ ...h, type: 'herramienta' as const }))
+      .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es', { numeric: true }));
+    
+    const sortedProductos = productos
+      .map(p => ({ ...p, type: 'producto' as const }))
+      .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es', { numeric: true }));
+    
+    // Combinar las categorías ordenadas
     const allItems = [
-      ...materials.map(m => ({ ...m, type: 'material' as const })),
-      ...herramientas.map(h => ({ ...h, type: 'herramienta' as const })),
-      ...productos.map(p => ({ ...p, type: 'producto' as const }))
+      ...sortedMaterials,
+      ...sortedHerramientas,
+      ...sortedProductos
     ];
     
-    // Ordenar por fecha de creación (más recientes primero)
-    return allItems.sort((a, b) => {
-      if (!a.created_at || !b.created_at) return 0;
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
+    return allItems;
   }, [materials, herramientas, productos]);
 
   // Forzar una actualización de todos los datos (versión optimizada)

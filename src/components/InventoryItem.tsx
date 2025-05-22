@@ -372,6 +372,8 @@ export default function InventoryItem({
       ? '#4F46E5' 
       : '#10B981';
   
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
   return (
     <div style={{
       backgroundColor: 'white',
@@ -389,20 +391,8 @@ export default function InventoryItem({
       cursor: item.type === 'material' || item.type === 'herramienta' ? 'pointer' : 'default'
     }}
     onClick={(e) => {
-      // Expandir si es un material o herramienta
-      if (item.type === 'material' || item.type === 'herramienta') {
-        // Prevenir que el clic se propague si se hace clic en los botones
-        if ((e.target as HTMLElement).closest('[data-action-button="true"]')) {
-          return;
-        }
-        setIsExpanded(!isExpanded);
-      } else {
-        // Para otros tipos, mantener el comportamiento original
-        if ((e.target as HTMLElement).closest('[data-action-button="true"]')) {
-          return;
-        }
-        onViewDetails(item);
-      }
+      if ((e.target as HTMLElement).closest('[data-action-button="true"]')) return;
+      setIsExpanded(!isExpanded);
     }}
     onMouseEnter={(e) => {
       e.currentTarget.style.transform = 'translateY(-2px)';
@@ -1149,9 +1139,13 @@ export default function InventoryItem({
       </div>
       
       {/* Sección de tallas para productos */}
-      {item.type === 'producto' && productInfo && productInfo.tallas_info.length > 0 && (
+      {isExpanded && item.type === 'producto' && productInfo && productInfo.tallas_info.length > 0 && (
         <div style={{ 
-          borderTop: '1px solid #E5E7EB', 
+          overflow: 'hidden',
+          maxHeight: isExpanded ? '1000px' : '0',
+          opacity: isExpanded ? 1 : 0,
+          transition: 'all 0.3s ease-in-out',
+          borderTop: '1px solid #E5E7EB',
           paddingTop: '12px',
           marginTop: '4px'
         }}>
@@ -1159,51 +1153,158 @@ export default function InventoryItem({
             fontSize: '14px', 
             fontWeight: 600, 
             color: '#374151', 
-            marginBottom: '10px' 
+            marginBottom: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
           }}>
-            Stock por Talla:
+            <SwatchIcon style={{ width: '18px', height: '18px', color: '#7C3AED' }} />
+            <span>Inventario por Talla</span>
           </div>
           
           <div style={{
-            display: 'flex',
-            gap: '12px',
-            flexWrap: 'wrap'
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+            gap: '16px',
+            padding: '8px',
+            width: '100%',
+            maxWidth: '800px',
+            margin: '0 auto'
           }}>
-            {productInfo.tallas_info.map((talla, index) => (
-              <div key={index} style={{
-                backgroundColor: '#F9FAFB',
-                padding: '8px 12px',
-                borderRadius: '8px',
-                border: '1px solid #E5E7EB',
-                minWidth: '80px',
-                textAlign: 'center'
-              }}>
-                <div style={{ 
-                  fontWeight: 600, 
-                  color: '#111827',
-                  fontSize: '14px'
-                }}>
-                  Talla {talla.numero}
-                </div>
-                <div style={{ 
-                  marginTop: '4px', 
-                  fontSize: '15px',
-                  fontWeight: 500,
-                  color: (talla.stock || 0) <= (talla.stockMinimo || 0) ? '#F59E0B' : '#10B981'
-                }}>
-                  {talla.stock ?? '0'}
-                </div>
-                {talla.stockMinimo !== null && talla.stockMinimo > 0 && (
-                  <div style={{ 
-                    fontSize: '12px', 
-                    color: '#9CA3AF',
-                    marginTop: '2px'
+            {productInfo.tallas_info.map((talla, index) => {
+              const isLowStock = (talla.stock || 0) <= (talla.stockMinimo || 0);
+              const stockPercentage = Math.min(
+                Math.round(((talla.stock || 0) / (talla.stockMinimo || 1)) * 100),
+                100
+              );
+
+              return (
+                <div 
+                  key={index} 
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    padding: '16px',
+                    borderRadius: '12px',
+                    border: `1px solid ${isLowStock ? '#FCD34D' : '#E5E7EB'}`,
+                    boxShadow: hoveredIndex === index 
+                      ? '0 6px 12px -2px rgba(0, 0, 0, 0.08)' 
+                      : '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    transition: 'all 0.2s ease',
+                    transform: hoveredIndex === index ? 'translateY(-2px)' : 'none'
+                  }}
+                  onMouseEnter={() => setHoveredIndex(index)}
+                  onMouseLeave={() => setHoveredIndex(null)}
+                >
+                  {/* Header */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '12px'
                   }}>
-                    Min: {talla.stockMinimo}
+                    <div style={{
+                      fontWeight: 700,
+                      color: '#1F2937',
+                      fontSize: '18px',
+                      letterSpacing: '-0.5px'
+                    }}>
+                      Talla {talla.numero}
+                    </div>
+                    {isLowStock && (
+                      <ExclamationTriangleIcon 
+                        style={{ 
+                          width: '18px', 
+                          height: '18px', 
+                          color: '#D97706' 
+                        }} 
+                      />
+                    )}
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {/* Stock Indicator */}
+                  <div style={{
+                    marginBottom: '12px',
+                    position: 'relative'
+                  }}>
+                    <div style={{
+                      fontSize: '24px',
+                      fontWeight: 700,
+                      color: isLowStock ? '#D97706' : '#059669',
+                      lineHeight: 1.2
+                    }}>
+                      {talla.stock ?? '0'}
+                      <span style={{
+                        fontSize: '14px',
+                        fontWeight: 500,
+                        color: '#6B7280',
+                        marginLeft: '4px'
+                      }}>
+                        unidades
+                      </span>
+                    </div>
+                    
+                    {/* Progress Bar */}
+                    <div style={{
+                      height: '4px',
+                      backgroundColor: '#E5E7EB',
+                      borderRadius: '2px',
+                      marginTop: '8px',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        width: `${stockPercentage}%`,
+                        height: '100%',
+                        backgroundColor: isLowStock ? '#FCD34D' : '#10B981',
+                        transition: 'width 0.3s ease'
+                      }} />
+                    </div>
+                  </div>
+
+                  {/* Meta Info */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: '13px',
+                    color: '#6B7280',
+                    paddingTop: '8px',
+                    borderTop: '1px solid #F3F4F6'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <ScaleIcon style={{ width: '14px', height: '14px' }} />
+                      <span>Mínimo:</span>
+                    </div>
+                    <div style={{ 
+                      fontWeight: 600,
+                      color: isLowStock ? '#D97706' : '#6B7280'
+                    }}>
+                      {talla.stockMinimo ?? 'N/A'}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          
+          {/* Leyenda informativa */}
+          <div style={{
+            marginTop: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '12px',
+            color: '#6B7280'
+          }}>
+            <div style={{
+              width: '12px',
+              height: '12px',
+              borderRadius: '2px',
+              backgroundColor: '#FEF3C7',
+              border: '1px solid #FDE68A'
+            }}></div>
+            <span>Stock por debajo del mínimo requerido</span>
           </div>
         </div>
       )}
@@ -1377,7 +1478,6 @@ export default function InventoryItem({
               />
               <DetailItem label="Último Mantenimiento" value={(item as Herramienta & { type: 'herramienta' }).ultimo_mantenimiento} />
               <DetailItem label="Próximo Mantenimiento" value={(item as Herramienta & { type: 'herramienta' }).proximo_mantenimiento} />
-              <DetailItem label="QR Code" value={(item as Herramienta & { type: 'herramienta' }).qr_code} />
             </div>
 
             {/* Columna 3: Ubicación y responsabilidad */}
@@ -1494,7 +1594,6 @@ export default function InventoryItem({
                 label="Destacado" 
                 value={(item as Producto & { type: 'producto' }).destacado ? 'Sí' : 'No'} 
               />
-              <DetailItem label="QR Code" value={(item as Producto & { type: 'producto' }).qr_code} />
             </div>
 
             {/* Columna 3: Información adicional */}

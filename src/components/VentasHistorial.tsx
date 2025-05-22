@@ -229,18 +229,21 @@ function VentasHistorial({ onClose, isClosing, productoId, productoNombre }: Ven
           
           setVentas(ventasFormateadas);
           
-          // Calcular totales
-          const total = ventasFormateadas.reduce((acc, venta) => acc + venta.cantidad, 0);
+          // Filtrar ventas canceladas para métricas y gráficas
+          const ventasNoCanceladas = ventasFormateadas.filter(venta => venta.estado !== 'Cancelada');
+          
+          // Calcular totales (excluyendo canceladas)
+          const total = ventasNoCanceladas.reduce((acc, venta) => acc + venta.cantidad, 0);
           setTotalVentas(total);
           
-          const ingresos = ventasFormateadas.reduce((acc, venta) => {
+          const ingresos = ventasNoCanceladas.reduce((acc, venta) => {
             // El precio final ya tiene en cuenta la cantidad, solo restamos el descuento
             return acc + (venta.precio_venta - venta.descuento);
           }, 0);
           setTotalIngresos(ingresos);
           
-          // Procesar datos para las gráficas
-          procesarDatosGraficas(ventasFormateadas);
+          // Procesar datos para las gráficas (excluyendo canceladas)
+          procesarDatosGraficas(ventasNoCanceladas);
         }
       } catch (error: any) {
         console.error('Error al cargar ventas:', error);
@@ -256,12 +259,132 @@ function VentasHistorial({ onClose, isClosing, productoId, productoNombre }: Ven
   // Cuando cambia el tipo de periodo, recalcular los datos
   useEffect(() => {
     if (ventas.length > 0) {
-      procesarDatosGraficas(ventas);
+      // Filtrar ventas canceladas para gráficas
+      const ventasNoCanceladas = ventas.filter(venta => venta.estado !== 'Cancelada');
+      procesarDatosGraficas(ventasNoCanceladas);
     }
   }, [tipoPeriodo, ventas]);
 
+
+
   // Función para procesar los datos de las gráficas
   const procesarDatosGraficas = (ventasData: Venta[]) => {
+    // Función auxiliar para formatear períodos
+    const formatearPeriodoInterno = (periodoKey: string, tipo: TipoPeriodo): string => {
+      switch(tipo) {
+        case 'dia':
+          return formatDate(periodoKey);
+        case 'semana':
+          return `Semana del ${formatDate(periodoKey)}`;
+        case 'mes': {
+          const [año, mes] = periodoKey.split('-');
+          const fecha = new Date(parseInt(año), parseInt(mes) - 1, 1);
+          return fecha.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+        }
+        case 'trimestre': {
+          const [año, trimestre] = periodoKey.split('-T');
+          return `${trimestre}T ${año}`;
+        }
+        case 'año':
+          return periodoKey;
+        default:
+          return periodoKey;
+      }
+    };
+
+    // Función auxiliar para obtener fecha de inicio del período
+    const obtenerFechaInicioPeriodoInterno = (periodoKey: string, tipo: TipoPeriodo): Date => {
+      switch(tipo) {
+        case 'dia':
+          return new Date(periodoKey);
+        case 'semana':
+          return new Date(periodoKey);
+        case 'mes': {
+          const [año, mes] = periodoKey.split('-');
+          return new Date(parseInt(año), parseInt(mes) - 1, 1);
+        }
+        case 'trimestre': {
+          const [año, trimestre] = periodoKey.split('-T');
+          const mesInicio = (parseInt(trimestre) - 1) * 3;
+          return new Date(parseInt(año), mesInicio, 1);
+        }
+        case 'año':
+          return new Date(parseInt(periodoKey), 0, 1);
+        default:
+          return new Date(periodoKey);
+      }
+    };
+
+    // Función auxiliar para completar períodos hasta hoy
+    const completarPeriodosHastaHoyInterno = (periodos: Map<string, VentaPorPeriodo>, tipo: TipoPeriodo): VentaPorPeriodo[] => {
+      if (periodos.size === 0) return [];
+      
+      const hoy = new Date();
+      const periodosArray = Array.from(periodos.keys()).sort();
+      const primerPeriodo = periodosArray[0];
+      
+      // Generar todos los períodos desde el primero hasta hoy
+      const todosPeriodos = new Set<string>();
+      
+      // Agregar períodos existentes
+      periodosArray.forEach(periodo => todosPeriodos.add(periodo));
+      
+      // Generar períodos intermedios hasta hoy
+      let fechaActual = obtenerFechaInicioPeriodoInterno(primerPeriodo, tipo);
+      
+      while (fechaActual <= hoy) {
+        let periodoKey: string;
+        
+        switch(tipo) {
+          case 'dia':
+            periodoKey = fechaActual.toISOString().split('T')[0];
+            fechaActual.setDate(fechaActual.getDate() + 1);
+            break;
+          case 'semana':
+            const diaSemana = fechaActual.getDay();
+            const diff = fechaActual.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1);
+            const lunes = new Date(fechaActual);
+            lunes.setDate(diff);
+            periodoKey = lunes.toISOString().split('T')[0];
+            fechaActual.setDate(fechaActual.getDate() + 7);
+            break;
+          case 'mes':
+            periodoKey = `${fechaActual.getFullYear()}-${String(fechaActual.getMonth() + 1).padStart(2, '0')}`;
+            fechaActual.setMonth(fechaActual.getMonth() + 1);
+            break;
+          case 'trimestre':
+            const trimestre = Math.floor(fechaActual.getMonth() / 3) + 1;
+            periodoKey = `${fechaActual.getFullYear()}-T${trimestre}`;
+            fechaActual.setMonth(fechaActual.getMonth() + 3);
+            break;
+          case 'año':
+            periodoKey = `${fechaActual.getFullYear()}`;
+            fechaActual.setFullYear(fechaActual.getFullYear() + 1);
+            break;
+          default:
+            periodoKey = `${fechaActual.getFullYear()}-${String(fechaActual.getMonth() + 1).padStart(2, '0')}`;
+            fechaActual.setMonth(fechaActual.getMonth() + 1);
+        }
+        
+        todosPeriodos.add(periodoKey);
+      }
+      
+      // Convertir a array con datos completos
+      return Array.from(todosPeriodos)
+        .sort()
+        .map(periodoKey => {
+          if (periodos.has(periodoKey)) {
+            return periodos.get(periodoKey)!;
+          } else {
+            return {
+              periodo: formatearPeriodoInterno(periodoKey, tipo),
+              cantidad: 0,
+              ingresos: 0
+            };
+          }
+        });
+    };
+
     // Ordenar ventas por fecha (más antiguas primero)
     const ventasOrdenadas = [...ventasData].sort((a, b) => 
       new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime()
@@ -311,15 +434,15 @@ function VentasHistorial({ onClose, isClosing, productoId, productoNombre }: Ven
         });
       } else {
         periodos.set(periodoKey, {
-          periodo: formatearPeriodo(periodoKey, tipoPeriodo),
+          periodo: formatearPeriodoInterno(periodoKey, tipoPeriodo),
           cantidad: venta.cantidad,
           ingresos: venta.precio_venta - venta.descuento
         });
       }
     });
     
-    // Convertir el Map a un array ordenado
-    const periodosFinal = Array.from(periodos.values());
+    // Completar períodos hasta la fecha actual
+    const periodosFinal = completarPeriodosHastaHoyInterno(periodos, tipoPeriodo);
     setVentasPorPeriodo(periodosFinal);
     
     // 2. Calcular ventas por estado
@@ -451,29 +574,6 @@ function VentasHistorial({ onClose, isClosing, productoId, productoNombre }: Ven
       .sort((a, b) => b.cantidad - a.cantidad); // Ordenar por cantidad, de mayor a menor
     
     setVentasPorColor(coloresFinal);
-  };
-  
-  // Función para formatear el periodo para su visualización
-  const formatearPeriodo = (periodoKey: string, tipo: TipoPeriodo): string => {
-    switch(tipo) {
-      case 'dia':
-        return formatDate(periodoKey);
-      case 'semana':
-        return `Semana del ${formatDate(periodoKey)}`;
-      case 'mes': {
-        const [año, mes] = periodoKey.split('-');
-        const fecha = new Date(parseInt(año), parseInt(mes) - 1, 1);
-        return fecha.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-      }
-      case 'trimestre': {
-        const [año, trimestre] = periodoKey.split('-T');
-        return `${trimestre}T ${año}`;
-      }
-      case 'año':
-        return periodoKey;
-      default:
-        return periodoKey;
-    }
   };
 
   // Formatear fecha
