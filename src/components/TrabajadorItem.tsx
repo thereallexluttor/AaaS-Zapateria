@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { EyeIcon } from '@heroicons/react/24/outline';
+import { EyeIcon, ChartBarIcon, PhoneIcon, EnvelopeIcon, CalendarDaysIcon, UserIcon } from '@heroicons/react/24/outline';
 
 export interface TrabajadorItemType {
   id: string;
@@ -35,12 +35,28 @@ function TrabajadorItem({
   onViewDetails,
   onViewDashboard
 }: TrabajadorItemProps) {
+  const [isHovered, setIsHovered] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   
   // Obtener una imagen de avatar con las iniciales del trabajador
   const getInitialAvatar = useCallback(() => {
     const initials = `${trabajador.nombre.charAt(0)}${trabajador.apellido.charAt(0)}`;
-    return `https://ui-avatars.com/api/?name=${initials}&background=random&size=48&bold=true`;
+    // Usar un gradiente más elegante basado en el nombre
+    const colors = [
+      ['667eea', '764ba2'], // Azul a púrpura
+      ['f093fb', 'f5576c'], // Rosa a rojo
+      ['4facfe', '00f2fe'], // Azul claro a cian
+      ['43e97b', '38f9d7'], // Verde a turquesa
+      ['fa709a', 'fee140'], // Rosa a amarillo
+      ['a8edea', 'fed6e3'], // Menta a rosa claro
+      ['ff9a9e', 'fecfef'], // Coral a lavanda
+      ['ffecd2', 'fcb69f']  // Durazno a naranja suave
+    ];
+    
+    const hash = trabajador.nombre.charCodeAt(0) + trabajador.apellido.charCodeAt(0);
+    const colorPair = colors[hash % colors.length];
+    
+    return `https://ui-avatars.com/api/?name=${initials}&background=${colorPair[0]}&color=ffffff&size=80&bold=true&format=svg`;
   }, [trabajador.nombre, trabajador.apellido]);
   
   const fechaFormateada = trabajador.fecha_contratacion 
@@ -55,13 +71,37 @@ function TrabajadorItem({
   const getTipoInfo = () => {
     switch (trabajador.tipo) {
       case 'produccion':
-        return { label: 'Producción', color: '#16A34A', bgColor: '#DCFCE7', icon: '🛠️' };
+        return { 
+          label: 'Producción', 
+          color: '#10B981', 
+          bgColor: '#ECFDF5', 
+          borderColor: '#A7F3D0',
+          icon: '🛠️' 
+        };
       case 'ventas':
-        return { label: 'Ventas', color: '#EA580C', bgColor: '#FFEDD5', icon: '🛒' };
+        return { 
+          label: 'Ventas', 
+          color: '#F59E0B', 
+          bgColor: '#FFFBEB', 
+          borderColor: '#FDE68A',
+          icon: '💼' 
+        };
       case 'administrativo':
-        return { label: 'Administrativo', color: '#2563EB', bgColor: '#DBEAFE', icon: '📊' };
+        return { 
+          label: 'Administrativo', 
+          color: '#3B82F6', 
+          bgColor: '#EFF6FF', 
+          borderColor: '#BFDBFE',
+          icon: '📊' 
+        };
       default:
-        return { label: 'No asignado', color: '#6B7280', bgColor: '#F3F4F6', icon: '❓' };
+        return { 
+          label: 'No asignado', 
+          color: '#6B7280', 
+          bgColor: '#F9FAFB', 
+          borderColor: '#E5E7EB',
+          icon: '❓' 
+        };
     }
   };
   
@@ -82,11 +122,12 @@ function TrabajadorItem({
     
     return areaMapping[trabajador.area] || { label: trabajador.area, icon: '👞' };
   };
-  
+
   const tipoInfo = getTipoInfo();
   const areaInfo = getAreaInfo();
   
-  const handleViewDetails = () => {
+  const handleViewDetails = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (onViewDetails) {
       onViewDetails(trabajador);
     }
@@ -95,14 +136,12 @@ function TrabajadorItem({
   const handleCardClick = (e: React.MouseEvent) => {
     // Prevent expanding/toggling selection if clicking action buttons or the checkbox itself
     if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('input[type="checkbox"]')) return;
-    // Toggle selection if clicking the card header area
-    // onSelectChange(trabajador.id, !isSelected); 
-    // OR toggle expansion:
     setIsExpanded(!isExpanded);
   };
   
   // Handler specifically for checkbox change
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation();
     onSelectChange(trabajador.id, e.target.checked);
   };
 
@@ -113,268 +152,397 @@ function TrabajadorItem({
       onViewDashboard(trabajador);
     }
   };
+
+  const handleMouseEnter = () => setIsHovered(true);
+  const handleMouseLeave = () => setIsHovered(false);
   
   return (
     <div 
       onClick={handleCardClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       style={{
-        background: isSelected ? '#F3F4F6' : '#fff', // Highlight if selected
-        borderRadius: '5px',
-        boxShadow: '0 2px 10px rgba(0, 0, 0, 0.05)',
-        padding: '16px',
-        marginBottom: '8px',
+        background: isSelected 
+          ? '#FAFBFC' 
+          : '#FFFFFF',
+        borderRadius: '8px',
+        border: isSelected 
+          ? '1px solid #CBD5E1' 
+          : isHovered 
+            ? '1px solid #CBD5E1' 
+            : '1px solid #E2E8F0',
+        padding: '20px',
+        marginBottom: '12px',
         display: 'flex',
         flexDirection: 'column',
-        transition: 'all 0.3s ease',
+        transition: 'all 0.2s ease',
         position: 'relative',
         overflow: 'hidden',
-        border: '1px solid #E5E7EB',
         cursor: 'pointer',
-        transform: isExpanded ? 'scale(1)' : 'scale(1)',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = 'translateY(-2px)';
-        e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.1)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = '0 2px 10px rgba(0, 0, 0, 0.05)';
+        transform: isHovered ? 'translateY(-1px)' : 'translateY(0)',
       }}
     >
-      {/* Borde izquierdo coloreado */}
-      <div style={{
-        position: 'absolute',
-        left: 0,
-        top: 0,
-        bottom: 0,
-        width: '6px',
-        backgroundColor: tipoInfo.color,
-        borderRadius: '5px 0 0 5px'
-      }} />
-      
       {/* Contenido principal */}
       <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'auto auto 1fr auto auto', // Add column for checkbox
+        display: 'flex',
+        alignItems: 'center',
         gap: '16px',
         width: '100%',
-        alignItems: 'center',
-        paddingLeft: '6px'
       }}>
-        {/* Checkbox */}
-        <div style={{ display: 'flex', alignItems: 'center', justifySelf: 'center' }}>
+        {/* Checkbox con estilo mejorado */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center',
+          position: 'relative'
+        }}>
           <input 
             type="checkbox"
             checked={isSelected}
             onChange={handleCheckboxChange}
-            onClick={(e) => e.stopPropagation()} // Prevent card click when clicking checkbox
-            style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+            style={{ 
+              width: '16px', 
+              height: '16px',
+              cursor: 'pointer',
+              accentColor: '#64748B',
+            }}
           />
         </div>
         
-        {/* Avatar */}
+        {/* Avatar minimalista */}
         <div style={{ 
-          width: '54px', 
-          height: '54px', 
-          borderRadius: '5px',
+          width: '56px', 
+          height: '56px', 
+          borderRadius: '8px',
           overflow: 'hidden',
           flexShrink: 0,
-          boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)'
+          border: '1px solid #E2E8F0',
+          position: 'relative',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         }}>
           <img 
             src={getInitialAvatar()} 
             alt={`${trabajador.nombre} ${trabajador.apellido}`} 
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            style={{ 
+              width: '100%', 
+              height: '100%', 
+              objectFit: 'cover',
+            }}
           />
         </div>
         
-        {/* Información básica */}
-        <div style={{ minWidth: 0 }}>
-          <h3 style={{ 
-            fontSize: '16px', 
-            fontWeight: 600, 
-            margin: '0 0 6px 0',
-            color: '#111827'
-          }}>
-            {trabajador.nombre} {trabajador.apellido}
-          </h3>
+        {/* Información principal rediseñada */}
+        <div style={{ 
+          flex: 1, 
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px'
+        }}>
+          {/* Nombre y título */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <h3 style={{ 
+              fontSize: '16px', 
+              fontWeight: 600, 
+              margin: 0,
+              color: '#1E293B',
+              letterSpacing: '-0.01em',
+              lineHeight: '1.3'
+            }}>
+              {trabajador.nombre} {trabajador.apellido}
+            </h3>
+            
+            {/* Badge de tipo minimalista */}
+            <span style={{
+              padding: '2px 8px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 500,
+              backgroundColor: tipoInfo.bgColor,
+              color: tipoInfo.color,
+              border: `1px solid ${tipoInfo.borderColor}`,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              whiteSpace: 'nowrap',
+              letterSpacing: '0.01em'
+            }}>
+              <span>{tipoInfo.icon}</span>
+              {tipoInfo.label}
+            </span>
+          </div>
           
+          {/* Meta información */}
           <div style={{ 
-            fontSize: '13px', 
-            color: '#6B7280',
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
-            flexWrap: 'wrap'
+            gap: '16px',
+            flexWrap: 'wrap',
+            fontSize: '13px',
+            color: '#64748B'
           }}>
-              <span>CI: {trabajador.cedula}</span>
-              {trabajador.fecha_contratacion && (
-                <span>Contratado: {fechaFormateada}</span>
-              )}
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <UserIcon style={{ width: '12px', height: '12px' }} />
+              CI: {trabajador.cedula}
+            </span>
+            
             {areaInfo && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                <span>{areaInfo.icon}</span> {areaInfo.label}
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span>{areaInfo.icon}</span> 
+                {areaInfo.label}
+              </span>
+            )}
+            
+            {trabajador.fecha_contratacion && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <CalendarDaysIcon style={{ width: '12px', height: '12px' }} />
+                {fechaFormateada}
               </span>
             )}
           </div>
         </div>
         
-        {/* Etiqueta de tipo */}
-        <div style={{
-          padding: '6px 10px',
-          borderRadius: '5px',
-          fontSize: '12px',
-          fontWeight: 500,
-          backgroundColor: tipoInfo.bgColor,
-          color: tipoInfo.color,
-          whiteSpace: 'nowrap',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px'
-        }}>
-          <span>{tipoInfo.icon}</span> {tipoInfo.label}
-        </div>
-        
-        {/* Salario */}
+        {/* Información del salario minimalista */}
         {trabajador.salario && (
           <div style={{
-            fontSize: '15px',
-            fontWeight: 600,
-            color: '#111827',
-            whiteSpace: 'nowrap'
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            gap: '2px'
           }}>
-            ${trabajador.salario.toLocaleString('es-ES')}
+            <div style={{
+              fontSize: '16px',
+              fontWeight: 600,
+              color: '#1E293B',
+              letterSpacing: '-0.01em'
+            }}>
+              ${trabajador.salario.toLocaleString('es-ES')}
+            </div>
+            <div style={{
+              fontSize: '11px',
+              color: '#64748B',
+              fontWeight: 400
+            }}>
+              mensual
+            </div>
           </div>
         )}
+        
+        {/* Botones de acción minimalistas */}
+        <div style={{ 
+          display: 'flex',
+          gap: '6px',
+          alignItems: 'center'
+        }}>
+          <button
+            onClick={handleViewDetails}
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '6px',
+              backgroundColor: 'transparent',
+              border: '1px solid #E2E8F0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              color: '#64748B'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#F8FAFC';
+              e.currentTarget.style.borderColor = '#CBD5E1';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.borderColor = '#E2E8F0';
+            }}
+            title="Ver detalles"
+          >
+            <EyeIcon style={{ width: '16px', height: '16px' }} />
+          </button>
+          
+          {/* Botón Dashboard para trabajadores de producción */}
+          {trabajador.tipo === 'produccion' && onViewDashboard && (
+            <button
+              onClick={handleViewDashboard}
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '6px',
+                backgroundColor: 'transparent',
+                border: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                color: '#64748B'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#F8FAFC';
+                e.currentTarget.style.borderColor = '#CBD5E1';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.borderColor = '#E2E8F0';
+              }}
+              title="Ver dashboard de rendimiento"
+            >
+              <ChartBarIcon style={{ width: '16px', height: '16px' }} />
+            </button>
+          )}
+        </div>
       </div>
       
-      {/* Información expandida */}
+      {/* Información expandida minimalista */}
       <div style={{ 
-        maxHeight: isExpanded ? '500px' : '0',
+        maxHeight: isExpanded ? '400px' : '0',
         opacity: isExpanded ? 1 : 0,
         overflow: 'hidden',
         transition: 'all 0.3s ease',
         marginTop: isExpanded ? '16px' : '0',
-        borderTop: isExpanded ? '1px solid #E5E7EB' : 'none',
-        paddingTop: isExpanded ? '16px' : '0',
       }}>
+        {/* Línea divisoria minimalista */}
+        <div style={{
+          height: '1px',
+          backgroundColor: '#E2E8F0',
+          marginBottom: '16px'
+        }} />
+        
+        {/* Grid de información detallada */}
         <div style={{ 
           display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-          gap: '12px 20px',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: '12px',
           marginBottom: '16px'
         }}>
           {trabajador.correo && (
-            <DetailItem label="Correo" value={trabajador.correo} />
+            <DetailItem 
+              icon={<EnvelopeIcon style={{ width: '14px', height: '14px' }} />}
+              label="Correo electrónico" 
+              value={trabajador.correo} 
+            />
           )}
           {trabajador.telefono && (
-            <DetailItem label="Teléfono" value={trabajador.telefono} />
+            <DetailItem 
+              icon={<PhoneIcon style={{ width: '14px', height: '14px' }} />}
+              label="Teléfono" 
+              value={trabajador.telefono} 
+            />
           )}
           {trabajador.especialidad && (
-            <DetailItem label="Especialidad" value={trabajador.especialidad} />
+            <DetailItem 
+              icon={<span style={{ fontSize: '14px' }}>🎯</span>}
+              label="Especialidad" 
+              value={trabajador.especialidad} 
+            />
           )}
           {trabajador.tipo_contrato && (
             <DetailItem 
-              label="Tipo Contrato" 
+              icon={<span style={{ fontSize: '14px' }}>📋</span>}
+              label="Tipo de contrato" 
               value={trabajador.tipo_contrato.charAt(0).toUpperCase() + trabajador.tipo_contrato.slice(1)} 
             />
           )}
           {trabajador.horas_trabajo && (
-            <DetailItem label="Horas" value={`${trabajador.horas_trabajo}h/semana`} />
+            <DetailItem 
+              icon={<span style={{ fontSize: '14px' }}>⏰</span>}
+              label="Horas de trabajo" 
+              value={`${trabajador.horas_trabajo}h/semana`} 
+            />
           )}
           {trabajador.fecha_nacimiento && (
             <DetailItem 
-              label="Fecha Nacimiento" 
+              icon={<span style={{ fontSize: '14px' }}>🎂</span>}
+              label="Fecha de nacimiento" 
               value={new Date(trabajador.fecha_nacimiento).toLocaleDateString('es-ES', {
                 day: '2-digit',
-                month: 'short',
+                month: 'long',
                 year: 'numeric'
               })} 
             />
           )}
         </div>
         
-        {/* Botones de acción */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'flex-end',
-          gap: '10px' 
-        }}>
-          <button
-            onClick={handleViewDetails}
-            style={{
+        {/* Dirección si existe */}
+        {trabajador.direccion && (
+          <div style={{
+            padding: '12px',
+            backgroundColor: '#F8FAFC',
+            borderRadius: '6px',
+            border: '1px solid #E2E8F0'
+          }}>
+            <div style={{ 
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '6px 12px',
-              backgroundColor: '#F3F4F6',
-              border: 'none',
-              borderRadius: '5px',
+              marginBottom: '6px'
+            }}>
+              <span style={{ fontSize: '14px' }}>📍</span>
+              <span style={{ 
+                fontSize: '12px',
+                fontWeight: 500,
+                color: '#64748B',
+                textTransform: 'uppercase',
+                letterSpacing: '0.025em'
+              }}>
+                Dirección
+              </span>
+            </div>
+            <span style={{ 
+              color: '#1E293B',
               fontSize: '13px',
-              color: '#4B5563',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#E5E7EB';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#F3F4F6';
-            }}
-          >
-            <EyeIcon style={{ width: '16px', height: '16px' }} />
-            Ver Detalles
-          </button>
-          
-          {/* Nuevo botón Dashboard (solo para trabajadores de producción) */}
-          {trabajador.tipo === 'produccion' && onViewDashboard && (
-            <button
-              onClick={handleViewDashboard}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                backgroundColor: '#EEF2FF',
-                border: 'none',
-                borderRadius: '5px',
-                fontSize: '13px',
-                color: '#4F46E5',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#E0E7FF';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#EEF2FF';
-              }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: '16px', height: '16px' }}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
-              </svg>
-              Ver Dashboard
-            </button>
-          )}
-        </div>
+              lineHeight: '1.4'
+            }}>
+              {trabajador.direccion}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// Componente auxiliar para mostrar detalles
-function DetailItem({ label, value }: { label: string, value: string }) {
+// Componente auxiliar para mostrar detalles con iconos
+function DetailItem({ 
+  icon, 
+  label, 
+  value 
+}: { 
+  icon: React.ReactNode;
+  label: string; 
+  value: string; 
+}) {
   return (
-    <div>
-      <span style={{ 
-        color: '#6B7280', 
-        fontSize: '13px', 
-        display: 'block', 
-        marginBottom: '2px' 
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '4px'
+    }}>
+      <div style={{ 
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px'
       }}>
-        {label}
+        <span style={{ color: '#64748B' }}>{icon}</span>
+        <span style={{ 
+          color: '#64748B', 
+          fontSize: '11px',
+          fontWeight: 500,
+          textTransform: 'uppercase',
+          letterSpacing: '0.025em'
+        }}>
+          {label}
+        </span>
+      </div>
+      <span style={{ 
+        color: '#1E293B',
+        fontSize: '13px',
+        fontWeight: 400,
+        paddingLeft: '18px'
+      }}>
+        {value}
       </span>
-      <span style={{ color: '#111827' }}>{value}</span>
     </div>
   );
 }
