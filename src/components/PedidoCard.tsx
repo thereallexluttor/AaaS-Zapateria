@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { PlusCircleIcon, CalendarIcon, CurrencyDollarIcon, ShoppingBagIcon, CheckCircleIcon, ClockIcon, XCircleIcon, ChevronDownIcon, ChevronRightIcon, TrashIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 
 interface Pedido {
@@ -69,13 +69,13 @@ const obtenerFechaEntregaMasCercana = (pedidos: Pedido[]): Date | null => {
 
 const getEstiloDiasRestantes = (dias: number) => {
   if (dias < 0) {
-    return { backgroundColor: '#FEE2E2', color: '#B91C1C' }; // Rojo - Atrasado
+    return { color: '#EF4444' }; // Rojo
   } else if (dias === 0) {
-    return { backgroundColor: '#FEF3C7', color: '#92400E' }; // Amarillo - Hoy
+    return { color: '#F59E0B' }; // Amarillo
   } else if (dias <= 3) {
-    return { backgroundColor: '#FFEDD5', color: '#C2410C' }; // Naranja - Próximo
+    return { color: '#F97316' }; // Naranja
   } else {
-    return { backgroundColor: '#ECFDF5', color: '#047857' }; // Verde - A tiempo
+    return { color: '#059669' }; // Verde
   }
 };
 
@@ -92,15 +92,15 @@ const getTextoDiasRestantes = (dias: number) => {
 const getEstadoStyle = (estado: string) => {
   switch (estado.toLowerCase()) {
     case 'pendiente':
-      return { backgroundColor: '#FEF3C7', color: '#92400E' };
+      return { backgroundColor: '#FEF3C7', color: '#92400E' }; // Amarillo suave
     case 'completado':
     case 'completada':
-      return { backgroundColor: '#D1FAE5', color: '#065F46' };
+      return { backgroundColor: '#F0FDF4', color: '#059669' }; // Verde suave
     case 'cancelado':
     case 'cancelada':
-      return { backgroundColor: '#FEE2E2', color: '#B91C1C' };
+      return { backgroundColor: '#FEF2F2', color: '#EF4444' }; // Rojo suave
     default:
-      return { backgroundColor: '#E5E7EB', color: '#374151' };
+      return { backgroundColor: '#F3F4F6', color: '#374151' }; // Gris suave
   }
 };
 
@@ -119,7 +119,31 @@ const getEstadoIcon = (estado: string) => {
   }
 };
 
+// Función auxiliar para calcular el progreso total de tareas
+const calcularProgresoTotalTareas = (pedidos: Pedido[]) => {
+  const totalTareas = pedidos.reduce((sum, pedido) => sum + pedido.total_tareas, 0);
+  const tareasCompletadas = pedidos.reduce((sum, pedido) => sum + pedido.tareas_completadas, 0);
+  return totalTareas > 0 ? Math.round((tareasCompletadas / totalTareas) * 100) : 0;
+};
+
 export function PedidoCard({ clienteNombre, pedidosCliente, isExpanded, onToggleExpand, onCancelPedido, onGenerateInvoice }: PedidoCardProps) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState<number>(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      const height = contentRef.current.scrollHeight;
+      setContentHeight(height);
+    }
+  }, [isExpanded, pedidosCliente]);
+
+  useEffect(() => {
+    setIsAnimating(true);
+    const timer = setTimeout(() => setIsAnimating(false), 300);
+    return () => clearTimeout(timer);
+  }, [isExpanded]);
+
   // Ordenar los pedidos del cliente por fecha de entrega
   const pedidosOrdenados = [...pedidosCliente].sort((a, b) => {
     const fechaA = new Date(a.fecha_entrega);
@@ -151,92 +175,179 @@ export function PedidoCard({ clienteNombre, pedidosCliente, isExpanded, onToggle
     <div 
       className="inventory-item-wrapper"
       style={{ 
-        border: '1px solid #E5E7EB', 
+        border: '1px solid #E5E7EB',
         borderRadius: '8px', 
         overflow: 'hidden', 
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+        boxShadow: 'none',
         backgroundColor: 'white',
-        transition: 'all 0.2s',
+        transition: 'all 0.2s ease',
+        margin: '8px 0'
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.05)';
+        e.currentTarget.style.borderColor = '#D1D5DB';
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+        e.currentTarget.style.borderColor = '#E5E7EB';
       }}
     >
       {/* Header siempre visible con información resumida */}
       <div 
         style={{ 
-          padding: '12px', 
+          padding: '24px 28px',
           display: 'flex', 
           alignItems: 'center',
           justifyContent: 'space-between',
           cursor: 'pointer',
-          backgroundColor: '#F9FAFB',
+          backgroundColor: 'white',
           borderBottom: isExpanded ? '1px solid #E5E7EB' : 'none'
         }}
         onClick={() => onToggleExpand(clienteNombre)}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
-          {/* Icono de expansión */}
-          <div style={{ color: '#6B7280' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: 1 }}>
+          {/* Icono de expansión con estilo más sutil */}
+          <div style={{ color: '#6B7280', display: 'flex', alignItems: 'center' }}>
             {isExpanded ? 
               <ChevronDownIcon style={{ width: '16px', height: '16px' }} /> : 
               <ChevronRightIcon style={{ width: '16px', height: '16px' }} />
             }
           </div>
           
-          {/* Información básica del cliente */}
+          {/* Gauge circular de progreso */}
+          {(() => {
+            const progress = calcularProgresoTotalTareas(pedidosOrdenados);
+            const size = 56;
+            const strokeWidth = 5;
+            const radius = (size - strokeWidth) / 2;
+            const circumference = radius * 2 * Math.PI;
+            const offset = circumference - (progress / 100) * circumference;
+            
+            return (
+              <div style={{ 
+                position: 'relative', 
+                width: size, 
+                height: size,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: '8px'
+              }}>
+                {/* Círculo de fondo */}
+                <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+                  <circle
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    fill="none"
+                    stroke="#E5E7EB"
+                    strokeWidth={strokeWidth}
+                  />
+                  {/* Círculo de progreso */}
+                  <circle
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    fill="none"
+                    stroke="#059669"
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={circumference}
+                    strokeDashoffset={offset}
+                    strokeLinecap="round"
+                    style={{ transition: 'stroke-dashoffset 0.3s ease' }}
+                  />
+                </svg>
+                {/* Texto de porcentaje */}
+                <div style={{ 
+                  position: 'absolute',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <div style={{
+                    fontSize: '16px',
+                    fontWeight: 600,
+                    color: progress === 100 ? '#059669' : '#374151',
+                    lineHeight: '1'
+                  }}>
+                    {progress}%
+                  </div>
+                  <div style={{
+                    fontSize: '11px',
+                    color: '#6B7280',
+                    marginTop: '3px'
+                  }}>
+                    Progreso
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+          
+          {/* Información básica del cliente con mejor tipografía */}
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '16px', fontWeight: 600, color: '#1F2937' }}>
+            <div style={{ 
+              fontSize: '17px', 
+              fontWeight: 500, 
+              color: '#111827',
+              marginBottom: '6px',
+              letterSpacing: '-0.01em'
+            }}>
               {clienteNombre}
             </div>
-            <div style={{ fontSize: '14px', color: '#6B7280', display: 'flex', gap: '8px', marginTop: '2px' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                <span style={{ backgroundColor: '#E5E7EB', padding: '1px 6px', borderRadius: '10px', color: '#374151', fontSize: '12px' }}>
-                  {pedidosOrdenados.length} pedido{pedidosOrdenados.length !== 1 ? 's' : ''}
-                </span>
-              </span>
-              
-              {/* Precio total */}
+            <div style={{ 
+              fontSize: '14px', 
+              color: '#6B7280', 
+              display: 'flex', 
+              gap: '16px', 
+              alignItems: 'center'
+            }}>
               <span style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
-                gap: '3px',
-                backgroundColor: '#F0FDF4',
-                padding: '1px 6px',
-                borderRadius: '10px',
-                color: '#166534',
-                fontSize: '12px',
+                gap: '6px',
+                color: '#4B5563',
                 fontWeight: 500
               }}>
-                <CurrencyDollarIcon style={{ width: '13px', height: '13px' }} />
+                {pedidosOrdenados.length} pedido{pedidosOrdenados.length !== 1 ? 's' : ''}
+              </span>
+              
+              {/* Precio total con estilo más limpio */}
+              <span style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '4px',
+                color: '#059669',
+                fontWeight: 500
+              }}>
+                <CurrencyDollarIcon style={{ width: '16px', height: '16px' }} />
                 ${precioTotal % 1 === 0 ? Math.floor(precioTotal) : precioTotal.toFixed(2).replace(/\.00$/, '')}
               </span>
               
               {fechaEntregaMasCercana && (
                 <>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                    <CalendarIcon style={{ width: '13px', height: '13px' }} />
+                  <span style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '6px',
+                    color: '#6B7280'
+                  }}>
+                    <CalendarIcon style={{ width: '16px', height: '16px' }} />
                     {formatDate(fechaEntregaMasCercana.toISOString())}
                   </span>
                   
-                  {/* Días restantes para entrega */}
+                  {/* Días restantes con estilo más sutil */}
                   {(() => {
                     const diasRestantes = calcularDiasRestantes(fechaEntregaMasCercana);
                     return (
                       <span style={{ 
                         display: 'flex', 
                         alignItems: 'center', 
-                        gap: '3px',
-                        ...getEstiloDiasRestantes(diasRestantes),
-                        padding: '1px 6px',
-                        borderRadius: '10px',
-                        fontSize: '12px',
+                        gap: '6px',
+                        color: getEstiloDiasRestantes(diasRestantes).color,
+                        fontSize: '14px',
                         fontWeight: 500
                       }}>
-                        <ClockIcon style={{ width: '12px', height: '12px' }} />
+                        <ClockIcon style={{ width: '16px', height: '16px' }} />
                         {getTextoDiasRestantes(diasRestantes)}
                       </span>
                     );
@@ -248,52 +359,55 @@ export function PedidoCard({ clienteNombre, pedidosCliente, isExpanded, onToggle
         </div>
         
         {/* Sección de botones y estado a la derecha */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {/* Botón de factura electrónica para toda la orden */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {/* Botón de factura con estilo más limpio */}
           {onGenerateInvoice && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                // Pasamos el primer pedido para obtener los datos del cliente
                 onGenerateInvoice(pedidosOrdenados[0]);
               }}
               style={{
-                background: 'none',
-                border: '1px solid #4F46E5',
+                background: 'white',
+                border: '1px solid #E5E7EB',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                color: '#4F46E5',
-                fontSize: '11px',
-                gap: '4px',
-                transition: 'all 0.2s'
+                padding: '8px 16px',
+                borderRadius: '6px',
+                color: '#374151',
+                fontSize: '14px',
+                gap: '8px',
+                fontWeight: 500,
+                transition: 'all 0.2s ease'
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#EEF2FF';
+                e.currentTarget.style.backgroundColor = '#F9FAFB';
+                e.currentTarget.style.borderColor = '#D1D5DB';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.backgroundColor = 'white';
+                e.currentTarget.style.borderColor = '#E5E7EB';
               }}
               title="Generar factura electrónica"
             >
-              <DocumentTextIcon style={{ width: '12px', height: '12px' }} />
+              <DocumentTextIcon style={{ width: '16px', height: '16px' }} />
               Factura
             </button>
           )}
           
-          {/* Estado general */}
+          {/* Estado con estilo más sutil */}
           <div style={{ 
-            ...getEstadoStyle(estadoGeneral), 
-            padding: '2px 8px', 
-            borderRadius: '10px', 
-            fontSize: '12px',
+            padding: '8px 16px', 
+            borderRadius: '6px', 
+            fontSize: '14px',
             fontWeight: 500,
             display: 'flex',
             alignItems: 'center',
-            gap: '3px'
+            gap: '6px',
+            backgroundColor: getEstadoStyle(estadoGeneral).backgroundColor,
+            color: getEstadoStyle(estadoGeneral).color
           }}>
             {getEstadoIcon(estadoGeneral)}
             {estadoGeneral.charAt(0).toUpperCase() + estadoGeneral.slice(1)}
@@ -302,99 +416,203 @@ export function PedidoCard({ clienteNombre, pedidosCliente, isExpanded, onToggle
       </div>
       
       {/* Contenido expandible */}
-      {isExpanded && (
-        <div style={{ display: 'flex', flexDirection: 'row' }}>
-          {/* Información del cliente - lado izquierdo */}
+      <div 
+        ref={contentRef}
+        style={{ 
+          height: isExpanded ? contentHeight : 0,
+          opacity: isExpanded ? 1 : 0,
+          overflow: 'hidden',
+          transition: 'height 0.3s ease-in-out, opacity 0.3s ease-in-out',
+          backgroundColor: 'white'
+        }}
+      >
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          transform: `translateY(${isExpanded ? '0' : '-10px'})`,
+          transition: 'transform 0.3s ease-in-out',
+        }}>
+          {/* Información del cliente - ahora horizontal */}
           <div style={{ 
             backgroundColor: '#F9FAFB', 
-            padding: '12px', 
-            borderRight: '1px solid #E5E7EB',
+            padding: '12px 24px',
             display: 'flex',
-            flexDirection: 'column',
-            gap: '2px',
-            minWidth: '200px',
-            width: '22%'
+            gap: '32px',
+            opacity: isExpanded ? 1 : 0,
+            transform: `translateY(${isExpanded ? '0' : '-10px'})`,
+            transition: 'opacity 0.3s ease-in-out, transform 0.3s ease-in-out',
+            transitionDelay: '0.1s',
+            borderBottom: '1px solid #E5E7EB'
           }}>
+            {/* Teléfono */}
             {pedidosOrdenados[0].cliente_telefono && (
               <div style={{ 
-                fontSize: '12px', 
-                color: '#6B7280',
                 display: 'flex',
-                alignItems: 'center', 
-                gap: '4px'
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '13px',
+                color: '#4B5563',
               }}>
-                📞 {pedidosOrdenados[0].cliente_telefono}
+                <div style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '4px',
+                  backgroundColor: '#F3F4F6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#6B7280'
+                }}>
+                  📞
+                </div>
+                {pedidosOrdenados[0].cliente_telefono}
               </div>
             )}
+
+            {/* Email */}
             {pedidosOrdenados[0].cliente_email && (
               <div style={{ 
-                fontSize: '12px', 
-                color: '#6B7280',
                 display: 'flex',
-                alignItems: 'center', 
-                gap: '4px',
-                textOverflow: 'ellipsis',
-                overflow: 'hidden',
-                whiteSpace: 'nowrap'
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '13px',
+                color: '#4B5563'
               }}>
-                ✉️ {pedidosOrdenados[0].cliente_email}
+                <div style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '4px',
+                  backgroundColor: '#F3F4F6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#6B7280'
+                }}>
+                  ✉️
+                </div>
+                {pedidosOrdenados[0].cliente_email}
               </div>
             )}
-            {pedidosOrdenados[0].cliente_direccion && (
-              <div style={{ 
-                fontSize: '12px', 
-                color: '#6B7280',
-                marginTop: '4px'
-              }}>
-                📍 {pedidosOrdenados[0].cliente_direccion}
-              </div>
-            )}
-            {pedidosOrdenados[0].cliente_ciudad && (
-              <div style={{ 
-                fontSize: '12px', 
+
+            {/* Dirección */}
+            <div style={{ 
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '13px',
+              color: '#4B5563'
+            }}>
+              <div style={{
+                width: '24px',
+                height: '24px',
+                borderRadius: '4px',
+                backgroundColor: '#F3F4F6',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 color: '#6B7280'
               }}>
-                {pedidosOrdenados[0].cliente_ciudad}
+                📍
               </div>
-            )}
+              <div>
+                {pedidosOrdenados[0].cliente_direccion}
+                {pedidosOrdenados[0].cliente_ciudad && (
+                  <span style={{ color: '#6B7280', marginLeft: '4px' }}>
+                    • {pedidosOrdenados[0].cliente_ciudad}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* Lista de pedidos - lado derecho */}
-          <div style={{ padding: '10px', flexGrow: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {pedidosOrdenados.map((pedido) => (
+          {/* Lista de pedidos */}
+          <div style={{ 
+            padding: '12px 24px', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: '6px',
+            opacity: isExpanded ? 1 : 0,
+            transform: `translateX(${isExpanded ? '0' : '10px'})`,
+            transition: 'opacity 0.3s ease-in-out, transform 0.3s ease-in-out',
+            transitionDelay: '0.15s'
+          }}>
+            {pedidosOrdenados.map((pedido, index) => (
               <div 
                 key={pedido.venta_id} 
                 style={{ 
                   border: '1px solid #E5E7EB',
                   borderRadius: '6px',
-                  padding: '8px',
-                  transition: 'all 0.2s',
-                  backgroundColor: '#FFFFFF',
-                  fontSize: '12px'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#F9FAFB';
-                  e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#FFFFFF';
-                  e.currentTarget.style.boxShadow = 'none';
+                  padding: '10px',
+                  backgroundColor: 'white',
+                  fontSize: '13px',
+                  opacity: isExpanded ? 1 : 0,
+                  transform: `translateY(${isExpanded ? '0' : '10px'})`,
+                  transition: 'opacity 0.3s ease-in-out, transform 0.3s ease-in-out',
+                  transitionDelay: `${0.2 + index * 0.05}s`
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'center' }}>
-                  <div style={{ 
-                    fontWeight: 600, 
-                    fontSize: '13px', 
-                    color: '#111827',
+                <div style={{ 
+                  display: 'grid',
+                  gridTemplateColumns: 'auto 1fr auto',
+                  gap: '10px',
+                  alignItems: 'center'
+                }}>
+                  {/* Icono del producto */}
+                  <div style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '6px',
+                    backgroundColor: '#F3F4F6',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px'
+                    justifyContent: 'center'
                   }}>
-                    <ShoppingBagIcon style={{ width: '14px', height: '14px' }} />
-                    {pedido.producto_nombre}
+                    <ShoppingBagIcon style={{ width: '18px', height: '18px', color: '#6B7280' }} />
                   </div>
+
+                  {/* Información del producto */}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ 
+                      fontWeight: 500, 
+                      color: '#111827',
+                      fontSize: '14px',
+                      marginBottom: '2px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}>
+                      {pedido.producto_nombre}
+                      <span style={{ 
+                        backgroundColor: '#F3F4F6', 
+                        padding: '1px 6px', 
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        color: '#374151',
+                        fontWeight: 500
+                      }}>
+                        x{pedido.cantidad}
+                      </span>
+                    </div>
+                    <div style={{ 
+                      display: 'flex', 
+                      gap: '10px', 
+                      color: '#6B7280',
+                      fontSize: '12px',
+                      alignItems: 'center'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <CalendarIcon style={{ width: '12px', height: '12px' }} />
+                        Venta: {formatDate(pedido.fecha_venta)}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <CalendarIcon style={{ width: '12px', height: '12px' }} />
+                        Entrega: {formatDate(pedido.fecha_entrega)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Estado y acciones */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {/* Botón de cancelar solo si el pedido está pendiente y la función está disponible */}
                     {pedido.estado.toLowerCase() === 'pendiente' && onCancelPedido && (
                       <button
                         onClick={(e) => {
@@ -402,114 +620,136 @@ export function PedidoCard({ clienteNombre, pedidosCliente, isExpanded, onToggle
                           onCancelPedido(pedido.venta_id);
                         }}
                         style={{
-                          background: 'none',
-                          border: 'none',
+                          background: 'white',
+                          border: '1px solid #E5E7EB',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          padding: '2px',
+                          padding: '5px',
                           borderRadius: '4px',
                           color: '#EF4444',
-                          transition: 'all 0.2s'
+                          transition: 'all 0.2s ease'
                         }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = '#FEE2E2';
+                          e.currentTarget.style.backgroundColor = '#FEF2F2';
+                          e.currentTarget.style.borderColor = '#FCA5A5';
                         }}
                         onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
+                          e.currentTarget.style.backgroundColor = 'white';
+                          e.currentTarget.style.borderColor = '#E5E7EB';
                         }}
                         title="Cancelar pedido"
                       >
-                        <TrashIcon style={{ width: '16px', height: '16px' }} />
+                        <TrashIcon style={{ width: '14px', height: '14px' }} />
                       </button>
                     )}
-                    
-                    {/* Etiqueta de estado */}
                     <div style={{ 
-                      ...getEstadoStyle(pedido.estado), 
-                      padding: '1px 6px', 
-                      borderRadius: '10px', 
-                      fontSize: '11px',
+                      padding: '3px 8px', 
+                      borderRadius: '4px', 
+                      fontSize: '12px',
                       fontWeight: 500,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '3px'
+                      gap: '4px',
+                      backgroundColor: getEstadoStyle(pedido.estado).backgroundColor,
+                      color: getEstadoStyle(pedido.estado).color
                     }}>
                       {getEstadoIcon(pedido.estado)}
                       {pedido.estado}
                     </div>
                   </div>
                 </div>
-                
-                <div style={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: '1fr 1fr', 
-                  gap: '6px',
-                  fontSize: '11px',
-                  color: '#6B7280',
-                  marginBottom: '6px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                    <CalendarIcon style={{ width: '12px', height: '12px' }} />
-                    <span>Venta: {formatDate(pedido.fecha_venta)}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                    <CalendarIcon style={{ width: '12px', height: '12px' }} />
-                    <span>Entrega: {formatDate(pedido.fecha_entrega)}</span>
-                  </div>
-                </div>
-                
-                {/* Barra de progreso de tareas */}
-                {pedido.total_tareas > 0 && (
-                  <div style={{ marginBottom: '6px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px', fontSize: '10px', color: '#4B5563' }}>
-                      <span>Progreso de producción</span>
-                      <span>{pedido.tareas_completadas} de {pedido.total_tareas} tareas</span>
-                    </div>
-                    <div style={{ 
-                      height: '6px', 
-                      backgroundColor: '#E5E7EB', 
-                      borderRadius: '3px', 
-                      overflow: 'hidden' 
-                    }}>
-                      <div style={{ 
-                        height: '100%', 
-                        width: `${Math.round((pedido.tareas_completadas / pedido.total_tareas) * 100)}%`, 
-                        backgroundColor: '#10B981', 
-                        borderRadius: '3px' 
-                      }} />
-                    </div>
-                  </div>
-                )}
-                
-                <div style={{ 
-                  display: 'flex', 
+
+                <div style={{
+                  display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  borderTop: '1px solid #F3F4F6',
-                  paddingTop: '6px',
-                  marginTop: '3px'
+                  marginTop: '10px',
+                  paddingTop: '10px',
+                  borderTop: '1px solid #E5E7EB'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                    <span style={{ 
-                      backgroundColor: '#F3F4F6', 
-                      padding: '1px 4px', 
-                      borderRadius: '4px',
-                      fontSize: '11px'
+                  {/* Gauge circular de progreso */}
+                  {pedido.total_tareas > 0 && (
+                    <div style={{ 
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px'
                     }}>
-                      x{pedido.cantidad}
-                    </span>
-                  </div>
+                      {(() => {
+                        const progress = Math.round((pedido.tareas_completadas / pedido.total_tareas) * 100);
+                        const size = 28;
+                        const strokeWidth = 3;
+                        const radius = (size - strokeWidth) / 2;
+                        const circumference = radius * 2 * Math.PI;
+                        const offset = circumference - (progress / 100) * circumference;
+                        
+                        return (
+                          <div style={{ 
+                            position: 'relative', 
+                            width: size, 
+                            height: size,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+                              <circle
+                                cx={size / 2}
+                                cy={size / 2}
+                                r={radius}
+                                fill="none"
+                                stroke="#E5E7EB"
+                                strokeWidth={strokeWidth}
+                              />
+                              <circle
+                                cx={size / 2}
+                                cy={size / 2}
+                                r={radius}
+                                fill="none"
+                                stroke="#10B981"
+                                strokeWidth={strokeWidth}
+                                strokeDasharray={circumference}
+                                strokeDashoffset={offset}
+                                strokeLinecap="round"
+                                style={{ transition: 'stroke-dashoffset 0.3s ease' }}
+                              />
+                            </svg>
+                            <div style={{ 
+                              position: 'absolute',
+                              fontSize: '9px',
+                              fontWeight: 600,
+                              color: progress === 100 ? '#059669' : '#374151'
+                            }}>
+                              {progress}%
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      <div style={{ 
+                        fontSize: '12px',
+                        color: '#6B7280'
+                      }}>
+                        <div style={{ fontWeight: 500, color: '#374151', fontSize: '11px' }}>
+                          Progreso de producción
+                        </div>
+                        <div style={{ fontSize: '11px' }}>
+                          {pedido.tareas_completadas} de {pedido.total_tareas} tareas
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Precio */}
                   <div style={{ 
                     fontWeight: 600, 
-                    color: '#111827',
-                    fontSize: '13px',
+                    color: '#059669',
+                    fontSize: '14px',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '3px'
                   }}>
-                    <CurrencyDollarIcon style={{ width: '12px', height: '12px' }} />
+                    <CurrencyDollarIcon style={{ width: '15px', height: '15px' }} />
                     ${pedido.precio_venta % 1 === 0 ? Math.floor(pedido.precio_venta) : pedido.precio_venta.toFixed(2).replace(/\.00$/, '')}
                   </div>
                 </div>
@@ -517,7 +757,7 @@ export function PedidoCard({ clienteNombre, pedidosCliente, isExpanded, onToggle
             ))}
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

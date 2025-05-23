@@ -795,7 +795,7 @@ function Produccion() {
                 </p>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
                 {Object.entries(pedidosPorEstado[activeTab] || {})
                   .map(([clienteNombre, pedidosCliente]) => (
                     <PedidoCard
