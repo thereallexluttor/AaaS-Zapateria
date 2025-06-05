@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Cliente } from '../lib/supabase';
-import { ChartBarIcon, ArrowTrendingUpIcon, CurrencyDollarIcon, XMarkIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { ChartBarIcon, ArrowTrendingUpIcon, CurrencyDollarIcon, XMarkIcon, ExclamationTriangleIcon, SparklesIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 interface ClienteEstadisticasProps {
@@ -39,6 +39,11 @@ interface DatosResumen {
   valorCancelaciones: number;
   cancelacionesPorMes: Array<{ fecha: string; total: number }>;
   productosCancelados: Array<{ producto_id: number; producto_nombre: string; cantidad: number }>;
+  promedioDiasEntreCompras: number;
+  fechaEstimadaProximaCompra: string;
+  probabilidadCompra: number;
+  productosProximaCompra: Array<{ producto_id: number; producto_nombre: string; probabilidad: number }>;
+  tendenciaCompras: 'creciente' | 'decreciente' | 'estable';
 }
 
 function ClienteEstadisticas({ onClose, isClosing, clienteId, clienteNombre }: ClienteEstadisticasProps) {
@@ -56,7 +61,12 @@ function ClienteEstadisticas({ onClose, isClosing, clienteId, clienteNombre }: C
     totalCancelaciones: 0,
     valorCancelaciones: 0,
     cancelacionesPorMes: [],
-    productosCancelados: []
+    productosCancelados: [],
+    promedioDiasEntreCompras: 0,
+    fechaEstimadaProximaCompra: '',
+    probabilidadCompra: 0,
+    productosProximaCompra: [],
+    tendenciaCompras: 'estable'
   });
 
   const COLORS = ['#3B82F6', '#8B5CF6', '#EC4899', '#F97316', '#84CC16', '#14B8A6'];
@@ -119,7 +129,12 @@ function ClienteEstadisticas({ onClose, isClosing, clienteId, clienteNombre }: C
         totalCancelaciones: 0,
         valorCancelaciones: 0,
         cancelacionesPorMes: [],
-        productosCancelados: []
+        productosCancelados: [],
+        promedioDiasEntreCompras: 0,
+        fechaEstimadaProximaCompra: 'No hay datos suficientes',
+        probabilidadCompra: 0,
+        productosProximaCompra: [],
+        tendenciaCompras: 'estable'
       });
     }
 
@@ -170,16 +185,49 @@ function ClienteEstadisticas({ onClose, isClosing, clienteId, clienteNombre }: C
     
     // Compras por mes (solo compras válidas)
     const comprasPorMes: {[key: string]: number} = {};
+    
+    // Procesar todas las ventas válidas
     ventasValidas.forEach(venta => {
-      // Extraer año y mes (YYYY-MM)
-      const fechaCorta = venta.fecha_inicio.substring(0, 7);
-      comprasPorMes[fechaCorta] = (comprasPorMes[fechaCorta] || 0) + (venta.precio_venta - (venta.descuento || 0));
+      if (venta.fecha_inicio) {
+        // Extraer año y mes de fecha_inicio (YYYY-MM)
+        const fechaCorta = venta.fecha_inicio.substring(0, 7);
+        const montoVenta = venta.precio_venta - (venta.descuento || 0);
+        comprasPorMes[fechaCorta] = (comprasPorMes[fechaCorta] || 0) + montoVenta;
+      }
     });
     
-    // Convertir a array para la gráfica y ordenar por fecha
-    const comprasPorMesArray = Object.entries(comprasPorMes)
-      .map(([fecha, total]) => ({ fecha, total }))
-      .sort((a, b) => a.fecha.localeCompare(b.fecha));
+    // Crear array para la gráfica
+    let comprasPorMesArray: Array<{ fecha: string; total: number }> = [];
+    
+    // Si hay compras, generar el rango completo de meses
+    if (Object.keys(comprasPorMes).length > 0) {
+      // Obtener todas las fechas y ordenarlas
+      const fechasConCompras = Object.keys(comprasPorMes).sort();
+      const fechaInicio = fechasConCompras[0];
+      
+      // Generar todos los meses desde la primera compra hasta el mes actual
+      const todosLosMeses: string[] = [];
+      const [añoInicio, mesInicio] = fechaInicio.split('-').map(Number);
+      const fechaActualObj = new Date();
+      const añoActual = fechaActualObj.getFullYear();
+      const mesActual = fechaActualObj.getMonth() + 1;
+      
+      for (let año = añoInicio; año <= añoActual; año++) {
+        const mesMin = año === añoInicio ? mesInicio : 1;
+        const mesMax = año === añoActual ? mesActual : 12;
+        
+        for (let mes = mesMin; mes <= mesMax; mes++) {
+          const fechaKey = `${año}-${mes.toString().padStart(2, '0')}`;
+          todosLosMeses.push(fechaKey);
+        }
+      }
+      
+      // Crear array final con todos los meses (con 0 si no hay compras)
+      comprasPorMesArray = todosLosMeses.map(fecha => ({
+        fecha,
+        total: comprasPorMes[fecha] || 0
+      }));
+    }
     
     // ----- DATOS DE CANCELACIONES -----
     
@@ -194,15 +242,42 @@ function ClienteEstadisticas({ onClose, isClosing, clienteId, clienteNombre }: C
     // Cancelaciones por mes
     const cancelacionesPorMes: {[key: string]: number} = {};
     ventasCanceladas.forEach(venta => {
-      const fechaCorta = venta.fecha_inicio.substring(0, 7);
-      cancelacionesPorMes[fechaCorta] = (cancelacionesPorMes[fechaCorta] || 0) + 
-        (venta.precio_venta - (venta.descuento || 0));
+      if (venta.fecha_inicio) {
+        const fechaCorta = venta.fecha_inicio.substring(0, 7);
+        const montoVenta = venta.precio_venta - (venta.descuento || 0);
+        cancelacionesPorMes[fechaCorta] = (cancelacionesPorMes[fechaCorta] || 0) + montoVenta;
+      }
     });
     
-    // Convertir a array para la gráfica
-    const cancelacionesPorMesArray = Object.entries(cancelacionesPorMes)
-      .map(([fecha, total]) => ({ fecha, total }))
-      .sort((a, b) => a.fecha.localeCompare(b.fecha));
+    // Crear array para cancelaciones
+    let cancelacionesPorMesArray: Array<{ fecha: string; total: number }> = [];
+    
+    // Si hay cancelaciones, generar el rango completo de meses
+    if (Object.keys(cancelacionesPorMes).length > 0) {
+      const fechasCancelacionesOrdenadas = Object.keys(cancelacionesPorMes).sort();
+      const fechaInicioCancelaciones = fechasCancelacionesOrdenadas[0];
+      
+      const todosLosMesesCancelaciones: string[] = [];
+      const [añoInicioCancelaciones, mesInicioCancelaciones] = fechaInicioCancelaciones.split('-').map(Number);
+      const fechaActualCancelaciones = new Date();
+      const añoActualCancelaciones = fechaActualCancelaciones.getFullYear();
+      const mesActualCancelaciones = fechaActualCancelaciones.getMonth() + 1;
+      
+      for (let año = añoInicioCancelaciones; año <= añoActualCancelaciones; año++) {
+        const mesMin = año === añoInicioCancelaciones ? mesInicioCancelaciones : 1;
+        const mesMax = año === añoActualCancelaciones ? mesActualCancelaciones : 12;
+        
+        for (let mes = mesMin; mes <= mesMax; mes++) {
+          const fechaKey = `${año}-${mes.toString().padStart(2, '0')}`;
+          todosLosMesesCancelaciones.push(fechaKey);
+        }
+      }
+      
+      cancelacionesPorMesArray = todosLosMesesCancelaciones.map(fecha => ({
+        fecha,
+        total: cancelacionesPorMes[fecha] || 0
+      }));
+    }
     
     // Productos cancelados
     const productosCanceladosPorCantidad: { [key: number]: { cantidad: number, nombre: string } } = {};
@@ -225,6 +300,110 @@ function ClienteEstadisticas({ onClose, isClosing, clienteId, clienteNombre }: C
       .sort((a, b) => b.cantidad - a.cantidad)
       .slice(0, 5); // Top 5
     
+    // ----- PROYECCIONES DE PRÓXIMA VENTA -----
+    
+    let promedioDiasEntreCompras = 0;
+    let fechaEstimadaProximaCompra = 'No hay datos suficientes';
+    let probabilidadCompra = 0;
+    let productosProximaCompra: Array<{ producto_id: number; producto_nombre: string; probabilidad: number }> = [];
+    let tendenciaCompras: 'creciente' | 'decreciente' | 'estable' = 'estable';
+
+    if (ventasValidas.length >= 2) {
+      // Calcular promedio de días entre compras
+      const fechasCompras = ventasValidas
+        .map(venta => new Date(venta.fecha_inicio))
+        .sort((a, b) => b.getTime() - a.getTime()); // Ordenar de más reciente a más antigua
+
+      let totalDiasEntreCompras = 0;
+      let intervalosValidos = 0;
+
+      for (let i = 0; i < fechasCompras.length - 1; i++) {
+        const diasEntre = Math.abs(fechasCompras[i].getTime() - fechasCompras[i + 1].getTime()) / (1000 * 60 * 60 * 24);
+        if (diasEntre > 0 && diasEntre <= 365) { // Filtrar intervalos realistas
+          totalDiasEntreCompras += diasEntre;
+          intervalosValidos++;
+        }
+      }
+
+      if (intervalosValidos > 0) {
+        promedioDiasEntreCompras = Math.round(totalDiasEntreCompras / intervalosValidos);
+        
+        // Calcular fecha estimada de próxima compra
+        const ultimaFechaCompra = fechasCompras[0];
+        const fechaEstimada = new Date(ultimaFechaCompra.getTime() + (promedioDiasEntreCompras * 24 * 60 * 60 * 1000));
+        fechaEstimadaProximaCompra = fechaEstimada.toISOString().split('T')[0];
+
+        // Calcular probabilidad de compra basada en el tiempo transcurrido
+        const diasDesdeUltimaCompra = Math.floor((new Date().getTime() - ultimaFechaCompra.getTime()) / (1000 * 60 * 60 * 24));
+        const ratioTiempo = diasDesdeUltimaCompra / promedioDiasEntreCompras;
+        
+        if (ratioTiempo < 0.5) {
+          probabilidadCompra = 20; // Muy temprano
+        } else if (ratioTiempo < 0.8) {
+          probabilidadCompra = 40; // Algo temprano
+        } else if (ratioTiempo < 1.2) {
+          probabilidadCompra = 80; // Momento óptimo
+        } else if (ratioTiempo < 1.5) {
+          probabilidadCompra = 90; // Un poco tarde
+        } else {
+          probabilidadCompra = 95; // Muy tarde
+        }
+
+        // Calcular productos más probables para próxima compra
+        const frecuenciaProductos: { [key: number]: { nombre: string; compras: number; ultimaCompra: Date } } = {};
+        
+        ventasValidas.forEach(venta => {
+          if (!frecuenciaProductos[venta.producto_id]) {
+            frecuenciaProductos[venta.producto_id] = {
+              nombre: venta.producto_nombre || 'Desconocido',
+              compras: 0,
+              ultimaCompra: new Date(venta.fecha_inicio)
+            };
+          }
+          frecuenciaProductos[venta.producto_id].compras++;
+          const fechaVenta = new Date(venta.fecha_inicio);
+          if (fechaVenta > frecuenciaProductos[venta.producto_id].ultimaCompra) {
+            frecuenciaProductos[venta.producto_id].ultimaCompra = fechaVenta;
+          }
+        });
+
+        productosProximaCompra = Object.entries(frecuenciaProductos)
+          .map(([id, data]) => {
+            const diasDesdeUltimaCompraProducto = Math.floor((new Date().getTime() - data.ultimaCompra.getTime()) / (1000 * 60 * 60 * 24));
+            const frecuenciaRelativa = data.compras / ventasValidas.length;
+            const factorTiempo = Math.min(diasDesdeUltimaCompraProducto / promedioDiasEntreCompras, 2);
+            const probabilidad = Math.round((frecuenciaRelativa * 0.7 + factorTiempo * 0.3) * 100);
+            
+            return {
+              producto_id: parseInt(id),
+              producto_nombre: data.nombre,
+              probabilidad: Math.min(probabilidad, 95)
+            };
+          })
+          .sort((a, b) => b.probabilidad - a.probabilidad)
+          .slice(0, 3);
+
+        // Calcular tendencia de compras
+        if (comprasPorMesArray.length >= 3) {
+          const ultimos3Meses = comprasPorMesArray.slice(-3);
+          const primeros3Meses = comprasPorMesArray.slice(0, 3);
+          
+          const promedioReciente = ultimos3Meses.reduce((acc, mes) => acc + mes.total, 0) / ultimos3Meses.length;
+          const promedioAntiguo = primeros3Meses.reduce((acc, mes) => acc + mes.total, 0) / primeros3Meses.length;
+          
+          const diferenciaPorcentual = ((promedioReciente - promedioAntiguo) / promedioAntiguo) * 100;
+          
+          if (diferenciaPorcentual > 15) {
+            tendenciaCompras = 'creciente';
+          } else if (diferenciaPorcentual < -15) {
+            tendenciaCompras = 'decreciente';
+          } else {
+            tendenciaCompras = 'estable';
+          }
+        }
+      }
+    }
+    
     setResumen({
       totalCompras,
       totalGastado,
@@ -236,21 +415,26 @@ function ClienteEstadisticas({ onClose, isClosing, clienteId, clienteNombre }: C
       totalCancelaciones,
       valorCancelaciones,
       cancelacionesPorMes: cancelacionesPorMesArray,
-      productosCancelados
+      productosCancelados,
+      promedioDiasEntreCompras,
+      fechaEstimadaProximaCompra,
+      probabilidadCompra,
+      productosProximaCompra,
+      tendenciaCompras
     });
   };
 
   // Formatear moneda
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-ES', {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'EUR'
+      currency: 'USD'
     }).format(value);
   };
 
   // Formatear fecha
   const formatDate = (dateString: string) => {
-    if (!dateString || dateString === 'No hay compras' || dateString === 'Desconocida') {
+    if (!dateString || dateString === 'No hay compras' || dateString === 'Desconocida' || dateString === 'No hay datos suficientes') {
       return dateString;
     }
     
@@ -275,6 +459,26 @@ function ClienteEstadisticas({ onClose, isClosing, clienteId, clienteNombre }: C
     const mesIndice = parseInt(mes) - 1;
     
     return `${meses[mesIndice]} ${año.slice(2)}`;
+  };
+
+  // Función para obtener el color de probabilidad
+  const getProbabilidadColor = (probabilidad: number) => {
+    if (probabilidad >= 80) return '#10B981'; // Verde
+    if (probabilidad >= 60) return '#F59E0B'; // Amarillo
+    if (probabilidad >= 40) return '#EF4444'; // Rojo
+    return '#6B7280'; // Gris
+  };
+
+  // Función para obtener el icono de tendencia
+  const getTendenciaIcon = (tendencia: 'creciente' | 'decreciente' | 'estable') => {
+    switch (tendencia) {
+      case 'creciente':
+        return '📈';
+      case 'decreciente':
+        return '📉';
+      default:
+        return '➡️';
+    }
   };
 
   return (
@@ -449,6 +653,174 @@ function ClienteEstadisticas({ onClose, isClosing, clienteId, clienteNombre }: C
               </div>
             </div>
             
+            {/* Proyecciones de Próxima Venta */}
+            {resumen.totalCompras >= 2 && (
+              <div style={{
+                backgroundColor: '#F0FDF4',
+                border: '1px solid #BBF7D0',
+                borderRadius: '8px',
+                padding: '20px',
+              }}>
+                <h3 style={{ 
+                  margin: '0 0 20px 0', 
+                  fontSize: '16px', 
+                  fontWeight: 600, 
+                  color: '#065F46',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <SparklesIcon style={{ width: '20px', height: '20px', color: '#10B981' }} />
+                  Proyecciones de Próxima Venta
+                </h3>
+                
+                {/* Métricas de predicción */}
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: '16px',
+                  marginBottom: '20px'
+                }}>
+                  <div style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                    padding: '16px',
+                    borderRadius: '8px',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                  }}>
+                    <div style={{ color: '#059669', fontSize: '14px', fontWeight: 500 }}>
+                      Promedio entre Compras
+                    </div>
+                    <div style={{ fontSize: '24px', fontWeight: 600, color: '#047857' }}>
+                      {resumen.promedioDiasEntreCompras} días
+                    </div>
+                  </div>
+                  
+                  <div style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                    padding: '16px',
+                    borderRadius: '8px',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                  }}>
+                    <div style={{ color: '#059669', fontSize: '14px', fontWeight: 500 }}>
+                      Fecha Estimada Próxima Compra
+                    </div>
+                    <div style={{ fontSize: '18px', fontWeight: 600, color: '#047857', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <CalendarIcon style={{ width: '16px', height: '16px' }} />
+                      {formatDate(resumen.fechaEstimadaProximaCompra)}
+                    </div>
+                  </div>
+                  
+                  <div style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                    padding: '16px',
+                    borderRadius: '8px',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                  }}>
+                    <div style={{ color: '#059669', fontSize: '14px', fontWeight: 500 }}>
+                      Probabilidad de Compra
+                    </div>
+                    <div style={{ 
+                      fontSize: '24px', 
+                      fontWeight: 600, 
+                      color: getProbabilidadColor(resumen.probabilidadCompra),
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}>
+                      {resumen.probabilidadCompra}%
+                      <div style={{
+                        width: '40px',
+                        height: '8px',
+                        backgroundColor: '#E5E7EB',
+                        borderRadius: '4px',
+                        overflow: 'hidden'
+                      }}>
+                        <div style={{
+                          width: `${resumen.probabilidadCompra}%`,
+                          height: '100%',
+                          backgroundColor: getProbabilidadColor(resumen.probabilidadCompra),
+                          transition: 'width 0.3s ease'
+                        }} />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                    padding: '16px',
+                    borderRadius: '8px',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                  }}>
+                    <div style={{ color: '#059669', fontSize: '14px', fontWeight: 500 }}>
+                      Tendencia de Compras
+                    </div>
+                    <div style={{ fontSize: '18px', fontWeight: 600, color: '#047857', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '20px' }}>{getTendenciaIcon(resumen.tendenciaCompras)}</span>
+                      {resumen.tendenciaCompras.charAt(0).toUpperCase() + resumen.tendenciaCompras.slice(1)}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Productos más probables para próxima compra */}
+                {resumen.productosProximaCompra.length > 0 && (
+                  <div>
+                    <h4 style={{ 
+                      margin: '0 0 16px 0', 
+                      fontSize: '14px', 
+                      fontWeight: 600, 
+                      color: '#065F46'
+                    }}>
+                      Productos Más Probables para Próxima Compra
+                    </h4>
+                    <div style={{ 
+                      display: 'grid', 
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                      gap: '12px'
+                    }}>
+                      {resumen.productosProximaCompra.map((producto) => (
+                        <div key={producto.producto_id} style={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                          padding: '12px 16px',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                        }}>
+                          <span style={{ fontSize: '14px', fontWeight: 500, color: '#374151' }}>
+                            {producto.producto_nombre}
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ 
+                              fontSize: '12px', 
+                              fontWeight: 600,
+                              color: getProbabilidadColor(producto.probabilidad)
+                            }}>
+                              {producto.probabilidad}%
+                            </span>
+                            <div style={{
+                              width: '30px',
+                              height: '6px',
+                              backgroundColor: '#E5E7EB',
+                              borderRadius: '3px',
+                              overflow: 'hidden'
+                            }}>
+                              <div style={{
+                                width: `${producto.probabilidad}%`,
+                                height: '100%',
+                                backgroundColor: getProbabilidadColor(producto.probabilidad),
+                                transition: 'width 0.3s ease'
+                              }} />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            
             {/* Gráfica de compras por mes */}
             <div style={{
               backgroundColor: '#FFFFFF',
@@ -482,7 +854,7 @@ function ClienteEstadisticas({ onClose, isClosing, clienteId, clienteNombre }: C
                       tickMargin={10}
                     />
                     <YAxis 
-                      tickFormatter={(value) => `€${value}`}
+                      tickFormatter={(value) => `$${value}`}
                       tick={{ fontSize: 12 }}
                     />
                     <Tooltip 
@@ -674,7 +1046,7 @@ function ClienteEstadisticas({ onClose, isClosing, clienteId, clienteNombre }: C
                           tickMargin={10}
                         />
                         <YAxis 
-                          tickFormatter={(value) => `€${value}`}
+                          tickFormatter={(value) => `$${value}`}
                           tick={{ fontSize: 12 }}
                         />
                         <Tooltip 

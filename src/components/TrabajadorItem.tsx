@@ -172,7 +172,7 @@ function TrabajadorItem({
             ? '1px solid #CBD5E1' 
             : '1px solid #E2E8F0',
         padding: '20px',
-        marginBottom: '12px',
+        marginBottom: '0px',
         display: 'flex',
         flexDirection: 'column',
         transition: 'all 0.2s ease',

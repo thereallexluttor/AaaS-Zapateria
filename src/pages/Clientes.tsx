@@ -152,14 +152,16 @@ function Clientes() {
     setActiveModal(type);
   };
   
-  const closeModal = useCallback(() => {
+  const closeModal = useCallback((shouldRefresh: boolean = false) => {
     setIsClosing(true);
     setTimeout(() => {
       setActiveModal(null);
       setIsClosing(false);
       
-      // Actualizar los clientes después de cerrar el modal
-      getClientes(searchTerm);
+      // Solo actualizar los clientes si se especifica que debe refrescar
+      if (shouldRefresh) {
+        getClientes(searchTerm);
+      }
     }, 300);
   }, [getClientes, searchTerm]);
   
@@ -567,7 +569,7 @@ function Clientes() {
           }}
         >
           <ClienteFormComponent
-            onClose={closeModal}
+            onClose={() => closeModal(true)}
             onSave={addCliente}
             isClosing={isClosing}
           />
@@ -593,7 +595,7 @@ function Clientes() {
           }}
         >
           <ClienteEstadisticas
-            onClose={closeModal}
+            onClose={() => closeModal(false)}
             isClosing={isClosing}
             clienteId={selectedCliente.id || ''}
             clienteNombre={selectedCliente.tipo_cliente === 'compania' 

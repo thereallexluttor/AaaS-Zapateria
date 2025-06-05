@@ -281,13 +281,23 @@ function Trabajadores() {
     setActiveModal(type);
   };
   
-  const closeModal = useCallback(() => {
+  // Handler para cerrar modales de consulta (no recarga datos)
+  const closeViewModal = useCallback(() => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setActiveModal(null);
+      setIsClosing(false);
+    }, 300);
+  }, []);
+  
+  // Handler para cerrar modal de formulario (recarga datos)
+  const closeFormModal = useCallback(() => {
     setIsClosing(true);
     setTimeout(() => {
       setActiveModal(null);
       setIsClosing(false);
       
-      // Actualizar los trabajadores después de cerrar el modal
+      // Solo actualizar los trabajadores después de cerrar el modal de formulario
       getTrabajadores(searchTerm);
     }, 300);
   }, [getTrabajadores, searchTerm]);
@@ -753,7 +763,7 @@ function Trabajadores() {
           }}
         >
           <TrabajadorFormComponent
-            onClose={closeModal}
+            onClose={closeFormModal}
             onSave={addTrabajador}
             isClosing={isClosing}
           />
@@ -781,7 +791,7 @@ function Trabajadores() {
           <TrabajadorDashboard
             trabajadorId={selectedTrabajador.id}
             nombreCompleto={`${selectedTrabajador.nombre} ${selectedTrabajador.apellido}`}
-            onClose={closeModal}
+            onClose={closeViewModal}
             isClosing={isClosing}
           />
         </div>
@@ -807,7 +817,7 @@ function Trabajadores() {
         >
           <TrabajadorDetalle
             trabajador={selectedTrabajador}
-            onClose={closeModal}
+            onClose={closeViewModal}
             isClosing={isClosing}
           />
         </div>

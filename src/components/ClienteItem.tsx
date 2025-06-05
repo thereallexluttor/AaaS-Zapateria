@@ -1,5 +1,5 @@
 import { Cliente } from '../lib/supabase';
-import { EyeIcon, UserIcon, PhoneIcon, EnvelopeIcon, MapPinIcon, ClockIcon, CurrencyDollarIcon, BuildingOfficeIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import { UserIcon, PhoneIcon, EnvelopeIcon, MapPinIcon, ClockIcon, CurrencyDollarIcon, BuildingOfficeIcon, ChartBarIcon, CalendarDaysIcon } from '@heroicons/react/24/outline';
 import { useState } from 'react';
 
 export type ClienteItemType = Cliente & { 
@@ -16,46 +16,17 @@ interface ClienteItemProps {
 }
 
 function getClienteImage(cliente: ClienteItemType) {
-  // Si el cliente tiene una URL de imagen, usarla
-  if (cliente.imagen_url) {
-    return <img src={cliente.imagen_url} alt={cliente.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }} />;
-  }
+  // Crear iniciales del cliente
+  const initials = cliente.tipo_cliente === 'compania' 
+    ? (cliente.nombre_compania?.charAt(0).toUpperCase() || 'C')
+    : `${cliente.nombre?.charAt(0).toUpperCase() || ''}${cliente.apellidos?.charAt(0).toUpperCase() || ''}`;
   
-  // Si es una compañía, mostrar un ícono diferente
-  if (cliente.tipo_cliente === 'compania') {
-    return (
-      <div style={{ 
-        width: '100%', 
-        height: '100%', 
-        backgroundColor: '#F0FDF4',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: '8px'
-      }}>
-        <BuildingOfficeIcon style={{ width: '30px', height: '30px', color: '#16A34A' }} />
-      </div>
-    );
-  }
+  // Colores basados en el tipo de cliente
+  const colors = cliente.tipo_cliente === 'compania' 
+    ? ['10B981', '059669'] // Verde para compañías
+    : ['3B82F6', '2563EB']; // Azul para personas
   
-  // Para personas, mostrar sus iniciales
-  return (
-    <div style={{ 
-      width: '100%', 
-      height: '100%', 
-      backgroundColor: '#EFF6FF',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontWeight: 600,
-      fontSize: '16px',
-      color: '#3B82F6',
-      borderRadius: '8px'
-    }}>
-      {cliente.nombre?.charAt(0).toUpperCase() || ''}
-      {cliente.apellidos ? cliente.apellidos.charAt(0).toUpperCase() : ''}
-    </div>
-  );
+  return `https://ui-avatars.com/api/?name=${initials}&background=${colors[0]}&color=ffffff&size=80&bold=true&format=svg`;
 }
 
 // Formatear fecha para mostrar
@@ -66,7 +37,7 @@ function formatDate(dateString: string): string {
     const date = new Date(dateString);
     return new Intl.DateTimeFormat('es-ES', { 
       day: '2-digit', 
-      month: '2-digit', 
+      month: 'short', 
       year: 'numeric' 
     }).format(date);
   } catch (error) {
@@ -74,15 +45,9 @@ function formatDate(dateString: string): string {
   }
 }
 
-// Formatear precio para mostrar
-function formatPrice(price: string | undefined): string {
-  if (!price) return '€0.00';
-  return `€${parseFloat(price).toFixed(2)}`;
-}
-
 export default function ClienteItem({ cliente, onViewDetails, isSelected = false, onSelect, onViewEstadisticas }: ClienteItemProps) {
   const [isHovered, setIsHovered] = useState(false);
-  const [detailsVisible, setDetailsVisible] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   
   // Determinar si es persona o compañía
   const isCompania = cliente.tipo_cliente === 'compania';
@@ -107,199 +72,435 @@ export default function ClienteItem({ cliente, onViewDetails, isSelected = false
   const phoneToShow = isCompania
     ? (cliente.contacto_telefono || cliente.telefono)
     : cliente.telefono;
-  
-  const handleViewDetails = () => {
-    setDetailsVisible(!detailsVisible);
-    onViewDetails(cliente);
+
+  // Información del tipo de cliente
+  const getTipoInfo = () => {
+    if (isCompania) {
+      return { 
+        label: 'Compañía', 
+        color: '#10B981', 
+        bgColor: '#ECFDF5', 
+        borderColor: '#A7F3D0',
+        icon: '🏢' 
+      };
+    } else {
+      return { 
+        label: 'Personal', 
+        color: '#3B82F6', 
+        bgColor: '#EFF6FF', 
+        borderColor: '#BFDBFE',
+        icon: '👤' 
+      };
+    }
   };
 
+  const tipoInfo = getTipoInfo();
+  
   const handleViewEstadisticas = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Evitar que se propague al elemento padre
+    e.stopPropagation();
     if (onViewEstadisticas) {
       onViewEstadisticas(cliente);
     }
   };
 
-  const handleCheckboxClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Evitar que se propague al elemento padre
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Prevent expanding if clicking action buttons or checkbox
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('input[type="checkbox"]')) return;
+    setIsExpanded(!isExpanded);
+  };
+
+  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation();
     if (onSelect) {
-      onSelect(cliente, !isSelected);
+      onSelect(cliente, e.target.checked);
     }
   };
   
   return (
     <div 
-      className="cliente-item"
+      onClick={handleCardClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
-        position: 'relative',
-        display: 'flex',
-        backgroundColor: '#FFFFFF',
+        background: isSelected ? '#FAFBFC' : '#FFFFFF',
         borderRadius: '8px',
-        boxShadow: 'none',
-        border: '1px solid #E5E7EB',
+        border: isSelected 
+          ? '1px solid #CBD5E1' 
+          : isHovered 
+            ? '1px solid #CBD5E1' 
+            : '1px solid #E2E8F0',
+        padding: '20px',
+        marginBottom: '12px',
+        display: 'flex',
+        flexDirection: 'column',
         transition: 'all 0.2s ease',
-        transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
+        position: 'relative',
         overflow: 'hidden',
         cursor: 'pointer',
-        marginBottom: '16px',
-        width: '100%',
-        maxWidth: '100%',
-        borderLeft: isCompania ? '4px solid #16A34A' : '4px solid #3B82F6'
+        transform: isHovered ? 'translateY(-1px)' : 'translateY(0)',
       }}
-      onClick={handleViewDetails}
     >
-      {/* Checkbox para seleccionar */}
-      {onSelect && (
-        <div 
-          style={{ 
-            padding: '16px 0 16px 16px',
-            display: 'flex',
-            alignItems: 'center'
-          }}
-          onClick={handleCheckboxClick}
-        >
-          <input 
-            type="checkbox" 
-            checked={isSelected}
-            onChange={() => {}} // Para evitar warnings de React sobre input controlado
-            style={{
-              width: '18px',
-              height: '18px',
-              cursor: 'pointer',
-              accentColor: '#4F46E5'
-            }}
-          />
-        </div>
-      )}
-      
-      {/* Imagen o Avatar */}
-      <div style={{ 
-        width: '60px', 
-        height: '60px', 
-        margin: '16px',
-        flexShrink: 0
-      }}>
-        {getClienteImage(cliente)}
-      </div>
-      
-      {/* Información principal */}
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        justifyContent: 'center',
-        flexGrow: 1,
-        padding: '16px 16px 16px 0'
-      }}>
-        <div style={{ 
-          fontSize: '16px', 
-          fontWeight: 600, 
-          color: '#111827',
-          marginBottom: '4px',
-          display: 'flex',
-          alignItems: 'center'
-        }}>
-          {displayName}
-          {isCompania && (
-            <span style={{ 
-              fontSize: '12px',
-              backgroundColor: '#F0FDF4', 
-              color: '#16A34A',
-              padding: '2px 6px',
-              borderRadius: '4px',
-              marginLeft: '8px'
-            }}>
-              Compañía
-            </span>
-          )}
-        </div>
-        
-        {secondaryInfo && (
-          <div style={{ 
-            fontSize: '14px', 
-            color: '#4B5563',
-            marginBottom: '6px'
-          }}>
-            {secondaryInfo}
-          </div>
-        )}
-        
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '12px',
-          fontSize: '14px',
-          color: '#6B7280',
-          fontWeight: 400
-        }}>
-          {emailToShow && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <EnvelopeIcon style={{ width: '16px', height: '16px' }} />
-              <span>{emailToShow}</span>
-            </div>
-          )}
-          
-          {phoneToShow && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <PhoneIcon style={{ width: '16px', height: '16px' }} />
-              <span>{phoneToShow}</span>
-            </div>
-          )}
-          
-          {ubicacion && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <MapPinIcon style={{ width: '16px', height: '16px' }} />
-              <span>{ubicacion}</span>
-            </div>
-          )}
-        </div>
-      </div>
-      
-      {/* Información adicional - Eliminada la fecha de registro y botón */}
+      {/* Contenido principal */}
       <div style={{ 
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'flex-end',
-        padding: '16px',
-        flexShrink: 0,
-        color: '#4B5563',
-        gap: '8px'
+        gap: '16px',
+        width: '100%',
       }}>
-        {/* Botón de estadísticas */}
-        {onViewEstadisticas && (
-          <button
-            onClick={handleViewEstadisticas}
-            style={{
+        {/* Checkbox */}
+        {onSelect && (
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center',
+            position: 'relative'
+          }}>
+            <input 
+              type="checkbox"
+              checked={isSelected}
+              onChange={handleCheckboxChange}
+              style={{ 
+                width: '16px', 
+                height: '16px',
+                cursor: 'pointer',
+                accentColor: '#64748B',
+              }}
+            />
+          </div>
+        )}
+        
+        {/* Avatar */}
+        <div style={{ 
+          width: '56px', 
+          height: '56px', 
+          borderRadius: '8px',
+          overflow: 'hidden',
+          flexShrink: 0,
+          border: '1px solid #E2E8F0',
+          position: 'relative'
+        }}>
+          <img 
+            src={getClienteImage(cliente)} 
+            alt={displayName} 
+            style={{ 
+              width: '100%', 
+              height: '100%', 
+              objectFit: 'cover',
+            }}
+          />
+        </div>
+        
+        {/* Información principal */}
+        <div style={{ 
+          flex: 1, 
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px'
+        }}>
+          {/* Nombre y badge */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <h3 style={{ 
+              fontSize: '16px', 
+              fontWeight: 600, 
+              margin: 0,
+              color: '#1E293B',
+              letterSpacing: '-0.01em',
+              lineHeight: '1.3'
+            }}>
+              {displayName}
+            </h3>
+            
+            {/* Badge de tipo */}
+            <span style={{
+              padding: '2px 8px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 500,
+              backgroundColor: tipoInfo.bgColor,
+              color: tipoInfo.color,
+              border: `1px solid ${tipoInfo.borderColor}`,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
               gap: '4px',
-              padding: '6px 10px',
-              borderRadius: '6px',
-              border: '1px solid #E5E7EB',
-              backgroundColor: '#F9FAFB',
-              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              letterSpacing: '0.01em'
+            }}>
+              <span>{tipoInfo.icon}</span>
+              {tipoInfo.label}
+            </span>
+          </div>
+          
+          {/* Información secundaria */}
+          {secondaryInfo && (
+            <div style={{ 
+              fontSize: '13px', 
+              color: '#64748B',
+              fontWeight: 500
+            }}>
+              {secondaryInfo}
+            </div>
+          )}
+          
+          {/* Meta información */}
+          <div style={{ 
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px',
+            flexWrap: 'wrap',
+            fontSize: '13px',
+            color: '#64748B'
+          }}>
+            {emailToShow && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <EnvelopeIcon style={{ width: '12px', height: '12px' }} />
+                {emailToShow}
+              </span>
+            )}
+            
+            {phoneToShow && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <PhoneIcon style={{ width: '12px', height: '12px' }} />
+                {phoneToShow}
+              </span>
+            )}
+            
+            {ubicacion && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <MapPinIcon style={{ width: '12px', height: '12px' }} />
+                {ubicacion}
+              </span>
+            )}
+            
+            {cliente.fecha_registro && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <CalendarDaysIcon style={{ width: '12px', height: '12px' }} />
+                {fechaRegistroFormateada}
+              </span>
+            )}
+          </div>
+        </div>
+        
+        {/* Botones de acción */}
+        <div style={{ 
+          display: 'flex',
+          gap: '6px',
+          alignItems: 'center'
+        }}>
+          {onViewEstadisticas && (
+            <button
+              onClick={handleViewEstadisticas}
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '6px',
+                backgroundColor: 'transparent',
+                border: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                color: '#64748B'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#F8FAFC';
+                e.currentTarget.style.borderColor = '#CBD5E1';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.borderColor = '#E2E8F0';
+              }}
+              title="Ver estadísticas"
+            >
+              <ChartBarIcon style={{ width: '16px', height: '16px' }} />
+            </button>
+          )}
+        </div>
+      </div>
+      
+      {/* Información expandida */}
+      <div style={{ 
+        maxHeight: isExpanded ? '400px' : '0',
+        opacity: isExpanded ? 1 : 0,
+        overflow: 'hidden',
+        transition: 'all 0.3s ease',
+        marginTop: isExpanded ? '16px' : '0',
+      }}>
+        {/* Línea divisoria */}
+        <div style={{
+          height: '1px',
+          backgroundColor: '#E2E8F0',
+          marginBottom: '16px'
+        }} />
+        
+        {/* Grid de información detallada */}
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: '12px',
+          marginBottom: '16px'
+        }}>
+          {isCompania ? (
+            <>
+              {cliente.nombre_compania && (
+                <DetailItem 
+                  icon={<BuildingOfficeIcon style={{ width: '14px', height: '14px' }} />}
+                  label="Nombre de la empresa" 
+                  value={cliente.nombre_compania} 
+                />
+              )}
+              {cliente.contacto_nombre && (
+                <DetailItem 
+                  icon={<UserIcon style={{ width: '14px', height: '14px' }} />}
+                  label="Persona de contacto" 
+                  value={cliente.contacto_nombre} 
+                />
+              )}
+              {cliente.contacto_email && (
+                <DetailItem 
+                  icon={<EnvelopeIcon style={{ width: '14px', height: '14px' }} />}
+                  label="Email de contacto" 
+                  value={cliente.contacto_email} 
+                />
+              )}
+              {cliente.contacto_telefono && (
+                <DetailItem 
+                  icon={<PhoneIcon style={{ width: '14px', height: '14px' }} />}
+                  label="Teléfono de contacto" 
+                  value={cliente.contacto_telefono} 
+                />
+              )}
+              {cliente.contacto_cargo && (
+                <DetailItem 
+                  icon={<span style={{ fontSize: '14px' }}>💼</span>}
+                  label="Cargo del contacto" 
+                  value={cliente.contacto_cargo} 
+                />
+              )}
+            </>
+          ) : (
+            <>
+              {cliente.apellidos && (
+                <DetailItem 
+                  icon={<UserIcon style={{ width: '14px', height: '14px' }} />}
+                  label="Apellidos" 
+                  value={cliente.apellidos} 
+                />
+              )}
+              {cliente.email && (
+                <DetailItem 
+                  icon={<EnvelopeIcon style={{ width: '14px', height: '14px' }} />}
+                  label="Email personal" 
+                  value={cliente.email} 
+                />
+              )}
+            </>
+          )}
+          
+          {cliente.telefono && (
+            <DetailItem 
+              icon={<PhoneIcon style={{ width: '14px', height: '14px' }} />}
+              label="Teléfono" 
+              value={cliente.telefono} 
+            />
+          )}
+          
+          {cliente.notas && (
+            <DetailItem 
+              icon={<span style={{ fontSize: '14px' }}>📝</span>}
+              label="Notas" 
+              value={cliente.notas} 
+            />
+          )}
+          
+          {cliente.codigo_postal && (
+            <DetailItem 
+              icon={<span style={{ fontSize: '14px' }}>📮</span>}
+              label="Código postal" 
+              value={cliente.codigo_postal} 
+            />
+          )}
+        </div>
+        
+        {/* Dirección completa si existe */}
+        {cliente.direccion && (
+          <div style={{
+            padding: '12px',
+            backgroundColor: '#F8FAFC',
+            borderRadius: '6px',
+            border: '1px solid #E2E8F0'
+          }}>
+            <div style={{ 
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              marginBottom: '6px'
+            }}>
+              <span style={{ fontSize: '14px' }}>📍</span>
+              <span style={{ 
+                fontSize: '12px',
+                fontWeight: 500,
+                color: '#64748B',
+                textTransform: 'uppercase',
+                letterSpacing: '0.025em'
+              }}>
+                Dirección completa
+              </span>
+            </div>
+            <span style={{ 
+              color: '#1E293B',
               fontSize: '13px',
-              fontWeight: 500,
-              color: '#4F46E5',
-              transition: 'all 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#F3F4F6';
-              e.currentTarget.style.transform = 'translateY(-1px)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#F9FAFB';
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
-          >
-            <ChartBarIcon style={{ width: '16px', height: '16px' }} />
-            <span>Estadísticas</span>
-          </button>
+              lineHeight: '1.4'
+            }}>
+              {cliente.direccion}
+            </span>
+          </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Componente auxiliar para mostrar detalles con iconos
+function DetailItem({ 
+  icon, 
+  label, 
+  value 
+}: { 
+  icon: React.ReactNode;
+  label: string; 
+  value: string; 
+}) {
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '4px'
+    }}>
+      <div style={{ 
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px'
+      }}>
+        <span style={{ color: '#64748B' }}>{icon}</span>
+        <span style={{ 
+          color: '#64748B', 
+          fontSize: '11px',
+          fontWeight: 500,
+          textTransform: 'uppercase',
+          letterSpacing: '0.025em'
+        }}>
+          {label}
+        </span>
+      </div>
+      <span style={{ 
+        color: '#1E293B',
+        fontSize: '13px',
+        fontWeight: 400,
+        paddingLeft: '18px'
+      }}>
+        {value}
+      </span>
     </div>
   );
 } 
